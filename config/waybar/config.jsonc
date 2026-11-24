@@ -1,0 +1,84 @@
+{
+    "layer": "top",
+    "position": "top",
+    "height": 24,
+    "spacing": 0,
+
+    "modules-left": ["hyprland/workspaces", "hyprland/submap"],
+    "modules-center": ["clock"],
+    "modules-right": ["tray", "hyprland/language", "cpu", "memory", "disk", "network", "pulseaudio", "battery"],
+
+    "hyprland/workspaces": {
+        "format": "{id}",
+        "on-click": "activate",
+        "sort-by-number": true
+    },
+
+    "hyprland/language": {
+        "format": "{short}",
+        "tooltip": false
+    },
+
+    "clock": {
+        "format": "{:%H:%M}",
+        "format-alt": "{:%a %d.%m.%Y  %H:%M}",
+        "tooltip-format": "<tt>{calendar}</tt>",
+        "calendar": {
+            "mode": "month",
+            "weeks-pos": "",
+            "format": {
+                "months": "<span color='#ededed'><b>{}</b></span>",
+                "weekdays": "<span color='#6b6b6b'>{}</span>",
+                "days": "<span color='#a0a0a0'>{}</span>",
+                "today": "<span color='#0c0c0c' background='#ededed'><b>{}</b></span>"
+            }
+        }
+    },
+
+    "cpu": {
+        "format": "cpu {usage}%",
+        "interval": 3
+    },
+
+    "memory": {
+        "format": "mem {percentage}%",
+        "tooltip-format": "{used:0.1f}G / {total:0.1f}G",
+        "interval": 5
+    },
+
+    "disk": {
+        "format": "disk {percentage_used}%",
+        "tooltip-format": "{used} / {total}",
+        "path": "/",
+        "interval": 60
+    },
+
+    "network": {
+        "format-wifi": "wifi {essid}",
+        "format-ethernet": "eth",
+        "format-linked": "no ip",
+        "format-disconnected": "offline",
+        "tooltip-format": "{ifname}  {ipaddr}",
+        "tooltip-format-wifi": "{ifname}  {ipaddr}  {signalStrength}%",
+        "on-click": "kitty --class float -e impala"
+    },
+
+    "pulseaudio": {
+        "format": "vol {volume}%",
+        "format-muted": "vol mute",
+        "scroll-step": 5,
+        "on-click": "pavucontrol",
+        "on-click-right": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
+    },
+
+    "battery": {
+        "format": "bat {capacity}%",
+        "format-charging": "bat {capacity}%+",
+        "states": { "warning": 25, "critical": 10 }
+    },
+
+    "tray": {
+        "icon-size": 14,
+        "spacing": 8
+    }
+}

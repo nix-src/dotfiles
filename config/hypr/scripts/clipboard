@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# История буфера обмена (cliphist) через fuzzel
+cliphist list \
+    | fuzzel --dmenu --prompt 'clip › ' --width 70 \
+    | cliphist decode \
+    | wl-copy

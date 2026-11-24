@@ -1,0 +1,85 @@
+# Официальные репозитории Arch. Комментарии и пустые строки игнорируются.
+
+# Hyprland и экосистема
+hyprland
+uwsm
+xdg-desktop-portal-hyprland
+xdg-desktop-portal-gtk
+hyprpolkitagent
+hyprlock
+hypridle
+hyprpicker
+
+# Панель, лаунчер, уведомления
+waybar
+fuzzel
+mako
+libnotify
+
+# Терминал и оболочка
+kitty
+zsh
+zsh-completions
+zsh-autosuggestions
+zsh-syntax-highlighting
+starship
+fzf
+zoxide
+eza
+bat
+ripgrep
+fd
+neovim
+
+# Звук
+pipewire
+pipewire-pulse
+pipewire-alsa
+pipewire-jack
+wireplumber
+pavucontrol
+playerctl
+
+# Сеть
+iwd
+impala
+
+# Скриншоты и буфер обмена
+grim
+slurp
+wl-clipboard
+cliphist
+
+# Файлы
+thunar
+gvfs
+tumbler
+xdg-user-dirs
+unzip
+p7zip
+
+# Шрифты
+ttf-jetbrains-mono-nerd
+noto-fonts
+noto-fonts-cjk
+noto-fonts-emoji
+
+# Темы (GTK / Qt / иконки / курсор)
+adw-gtk-theme
+papirus-icon-theme
+adwaita-cursors
+qt6ct
+qt5-wayland
+qt6-wayland
+
+# Утилиты
+brightnessctl
+btop
+git
+github-cli
+openssh
+wget
+curl
+man-db
+pciutils
+firefox

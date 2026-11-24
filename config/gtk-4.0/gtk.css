@@ -1,0 +1,9 @@
+/* Без скруглений */
+* {
+    border-radius: 0;
+}
+
+window,
+window.background {
+    box-shadow: none;
+}

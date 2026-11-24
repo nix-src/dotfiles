@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+choice="$(printf 'lock\nlogout\nsuspend\nreboot\nshutdown\n' \
+    | fuzzel --dmenu --prompt 'power › ' --lines 5 --width 24)" || exit 0
+
+case "$choice" in
+    lock)     loginctl lock-session ;;
+    logout)   uwsm stop ;;
+    suspend)  systemctl suspend ;;
+    reboot)   systemctl reboot ;;
+    shutdown) systemctl poweroff ;;
+esac

@@ -1,0 +1,16 @@
+# Переменные окружения для сессии (uwsm подхватывает этот файл при старте Hyprland)
+
+export XCURSOR_THEME=Adwaita
+export XCURSOR_SIZE=24
+
+export QT_QPA_PLATFORM="wayland;xcb"
+export QT_QPA_PLATFORMTHEME=qt6ct
+export QT_WAYLAND_DISABLE_WINDOWDECORATION=1
+export ELECTRON_OZONE_PLATFORM_HINT=auto
+
+# NVIDIA (только если загружен проприетарный драйвер)
+if [ -e /proc/driver/nvidia/version ]; then
+    export LIBVA_DRIVER_NAME=nvidia
+    export __GLX_VENDOR_LIBRARY_NAME=nvidia
+    export NVD_BACKEND=direct
+fi

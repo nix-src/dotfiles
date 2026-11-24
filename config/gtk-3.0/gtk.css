@@ -1,0 +1,10 @@
+/* Без скруглений */
+* {
+    border-radius: 0;
+    -gtk-outline-radius: 0;
+}
+
+decoration,
+window.background {
+    box-shadow: none;
+}
