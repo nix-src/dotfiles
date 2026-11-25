@@ -5,9 +5,6 @@
     "memory": {
         "format": "озу {percentage}%"
     },
-    "disk": {
-        "format": "диск {percentage_used}%"
-    },
     "pulseaudio": {
         "format": "звук {volume}%",
         "format-muted": "звук выкл"

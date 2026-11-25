@@ -36,7 +36,7 @@ Flags: `--links-only` (configs only), `--no-nvidia`.
 | Compositor | Hyprland (via uwsm) |
 | Bar | waybar |
 | Wallpaper | mpvpaper + generated video (paused when covered by windows) |
-| Login screen | SDDM, `mono` theme |
+| Login screen | SDDM, `mono` theme: pick an account from the list (↑/↓ to switch), type the password |
 | Launcher / menus | fuzzel |
 | Notifications | mako |
 | Lock / idle | hyprlock / hypridle (lock after 10 min, screen off after 15) |

@@ -53,7 +53,6 @@ window#waybar {
 #language,
 #cpu,
 #memory,
-#disk,
 #pulseaudio,
 #battery {
     padding: 0 12px;

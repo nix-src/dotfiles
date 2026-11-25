@@ -5,9 +5,6 @@
     "memory": {
         "format": "mem {percentage}%"
     },
-    "disk": {
-        "format": "disk {percentage_used}%"
-    },
     "pulseaudio": {
         "format": "vol {volume}%",
         "format-muted": "vol mute"

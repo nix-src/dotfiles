@@ -37,7 +37,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/nix-src/dotfiles/main/instal
 | Композитор | Hyprland (через uwsm) |
 | Панель | waybar |
 | Обои | mpvpaper + сгенерированное видео (пауза, когда закрыты окнами) |
-| Экран входа | SDDM, тема `mono` |
+| Экран входа | SDDM, тема `mono`: выбор учётной записи из списка (↑/↓ для переключения), ввод пароля |
 | Лаунчер / меню | fuzzel |
 | Уведомления | mako |
 | Блокировка / idle | hyprlock / hypridle (блок через 10 мин, экран off через 15) |

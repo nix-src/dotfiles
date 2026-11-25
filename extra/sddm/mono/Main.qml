@@ -22,9 +22,25 @@ Rectangle {
 
     property int sessionIndex: sessionModel.lastIndex >= 0 ? sessionModel.lastIndex : 0
 
+    // Выбранная учётная запись (по умолчанию — последний вошедший пользователь)
+    property string selectedUser: userModel.lastUser
+
     function doLogin() {
         error.text = ""
-        sddm.login(user.text, password.text, root.sessionIndex)
+        var name = userNames.count > 0 ? root.selectedUser : manualUser.text
+        sddm.login(name, password.text, root.sessionIndex)
+    }
+
+    // Стрелки вверх/вниз в поле пароля — соседняя учётная запись
+    function stepUser(delta) {
+        var n = userNames.count
+        if (n < 2) return
+        var cur = 0
+        for (var i = 0; i < n; i++)
+            if (userNames.itemAt(i).uname === root.selectedUser) cur = i
+        root.selectedUser = userNames.itemAt((cur + delta + n) % n).uname
+        error.text = ""
+        password.text = ""
     }
 
     function sessionName(i, count) {
@@ -44,7 +60,7 @@ Rectangle {
         model: userModel
         delegate: Item { property string uname: model.name }
         onItemAdded: function(index, item) {
-            if (user.text === "" && index === 0) user.text = item.uname
+            if (root.selectedUser === "" && index === 0) root.selectedUser = item.uname
         }
     }
 
@@ -90,17 +106,77 @@ Rectangle {
 
         Item { width: 1; height: 26 }
 
-        // имя пользователя
+        // учётные записи: клик выбирает пользователя
+        Column {
+            anchors.horizontalCenter: parent.horizontalCenter
+            spacing: 6
+
+            Repeater {
+                model: userModel
+                delegate: Rectangle {
+                    readonly property bool selected: model.name === root.selectedUser
+                    width: 300; height: 44
+                    color: selected ? "#1c1c1c" : (userArea.containsMouse ? "#151515" : root.field)
+                    border.width: 1
+                    border.color: selected ? root.muted : root.dim
+
+                    Rectangle {          // метка выбранной записи
+                        width: 3; height: parent.height - 2
+                        x: 1; y: 1
+                        color: root.bright
+                        visible: parent.selected
+                    }
+
+                    Column {
+                        anchors.centerIn: parent
+                        spacing: 1
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            color: parent.parent.selected ? root.bright : root.fg
+                            font.family: root.fontName
+                            font.pixelSize: 14
+                            text: model.realName !== "" ? model.realName : model.name
+                        }
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            visible: model.realName !== "" && model.realName !== model.name
+                            color: root.muted
+                            font.family: root.fontName
+                            font.pixelSize: 11
+                            text: model.name
+                        }
+                    }
+
+                    MouseArea {
+                        id: userArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            if (root.selectedUser !== model.name) {
+                                root.selectedUser = model.name
+                                password.text = ""
+                                error.text = ""
+                            }
+                            password.forceActiveFocus()
+                        }
+                    }
+                }
+            }
+        }
+
+        // запасной вариант: SDDM не отдал список пользователей — вводим имя вручную
         Rectangle {
+            visible: userNames.count === 0
             width: 300; height: 38
             anchors.horizontalCenter: parent.horizontalCenter
             color: root.field
             border.width: 1
-            border.color: user.activeFocus ? root.muted : root.dim
+            border.color: manualUser.activeFocus ? root.muted : root.dim
 
             Text {
                 anchors.centerIn: parent
-                visible: user.text === ""
+                visible: manualUser.text === ""
                 color: root.dim
                 font.family: root.fontName
                 font.pixelSize: 13
@@ -108,7 +184,7 @@ Rectangle {
             }
 
             TextInput {
-                id: user
+                id: manualUser
                 anchors.fill: parent
                 anchors.leftMargin: 12; anchors.rightMargin: 12
                 verticalAlignment: TextInput.AlignVCenter
@@ -116,14 +192,14 @@ Rectangle {
                 color: root.fg
                 font.family: root.fontName
                 font.pixelSize: 14
-                text: userModel.lastUser
                 clip: true
-                selectByMouse: true
                 KeyNavigation.tab: password
                 Keys.onReturnPressed: password.forceActiveFocus()
                 Keys.onEnterPressed: password.forceActiveFocus()
             }
         }
+
+        Item { width: 1; height: 4 }
 
         // пароль
         Rectangle {
@@ -146,7 +222,9 @@ Rectangle {
                 passwordCharacter: "•"
                 clip: true
                 focus: true
-                KeyNavigation.backtab: user
+                KeyNavigation.backtab: manualUser
+                Keys.onUpPressed: root.stepUser(-1)
+                Keys.onDownPressed: root.stepUser(1)
                 Keys.onReturnPressed: root.doLogin()
                 Keys.onEnterPressed: root.doLogin()
             }

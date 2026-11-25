@@ -9,7 +9,7 @@
 
     "modules-left": ["hyprland/workspaces", "custom/canvas"],
     "modules-center": ["clock"],
-    "modules-right": ["custom/media", "tray", "hyprland/language", "cpu", "memory", "disk", "pulseaudio", "battery", "custom/settings", "custom/power"],
+    "modules-right": ["custom/media", "tray", "hyprland/language", "cpu", "memory", "pulseaudio", "battery", "custom/settings", "custom/power"],
 
     "hyprland/workspaces": {
         "format": "{id}",
@@ -62,12 +62,6 @@
     "memory": {
         "tooltip-format": "{used:0.1f}G / {total:0.1f}G",
         "interval": 5
-    },
-
-    "disk": {
-        "tooltip-format": "{used} / {total}",
-        "paths": ["/"],
-        "interval": 60
     },
 
     "pulseaudio": {
