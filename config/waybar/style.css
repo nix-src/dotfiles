@@ -46,7 +46,10 @@ window#waybar {
     color: #ededed;
 }
 
-#tray,
+#tray {
+    padding: 0 10px;
+}
+
 #language,
 #cpu,
 #memory,
@@ -65,18 +68,16 @@ window#waybar {
     color: #6b6b6b;
 }
 
-#custom-media.idle {
-    color: #4f4f4f;
-}
-
 #custom-media:hover {
     background: #1f1f1f;
     color: #ededed;
 }
 
+/* Иконки-кнопки: один набор глифов (Material Design из Nerd Font) и один размер */
 #custom-settings,
 #custom-power {
-    padding: 0 12px;
+    padding: 0 11px;
+    font-size: 15px;
     color: #a0a0a0;
 }
 

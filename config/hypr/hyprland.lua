@@ -68,19 +68,34 @@ end
 --  AUTOSTART  --
 -----------------
 
+-- Сеанс может быть запущен как через uwsm («Hyprland (uwsm-managed)» в SDDM),
+-- так и напрямую. Через uwsm программы запускаются как systemd-юниты.
+local UWSM = os.getenv("UWSM_FINALIZE_VARNAMES") ~= nil
+local function app(cmd) return UWSM and ("uwsm app -- " .. cmd) or cmd end
+
 hl.on("hyprland.start", function()
-    hl.exec_cmd("uwsm app -- " .. scripts .. "/wallpaper")
-    hl.exec_cmd("uwsm app -- " .. scripts .. "/bar")
-    hl.exec_cmd("uwsm app -- mako")
-    hl.exec_cmd("uwsm app -- " .. scripts .. "/idle")
-    hl.exec_cmd("uwsm app -- wl-paste --type text --watch cliphist store")
-    hl.exec_cmd("uwsm app -- wl-paste --type image --watch cliphist store")
+    hl.exec_cmd(app(scripts .. "/wallpaper"))
+    hl.exec_cmd(app(scripts .. "/bar"))
+    hl.exec_cmd(app(scripts .. "/player"))
+    hl.exec_cmd(app("mako"))
+    hl.exec_cmd(app(scripts .. "/idle"))
+    hl.exec_cmd(app("wl-paste --type text --watch cliphist store"))
+    hl.exec_cmd(app("wl-paste --type image --watch cliphist store"))
+    -- В uwsm-сеансе polkit-агент запускает systemd (hyprpolkitagent.service)
+    if not UWSM then
+        hl.exec_cmd("/usr/lib/hyprpolkitagent/hyprpolkitagent")
+    end
 end)
 
--- Остальные переменные окружения — в ~/.config/uwsm/env
+-- Переменные окружения. В uwsm-сеансе они же берутся из ~/.config/uwsm/env;
+-- здесь — чтобы всё работало и в сеансе без uwsm.
 hl.env("XCURSOR_THEME", "Adwaita")
 hl.env("XCURSOR_SIZE", "24")
 hl.env("HYPRCURSOR_SIZE", "24")
+hl.env("QT_QPA_PLATFORM", "wayland;xcb")
+hl.env("QT_QPA_PLATFORMTHEME", "qt6ct")
+hl.env("QT_WAYLAND_DISABLE_WINDOWDECORATION", "1")
+hl.env("ELECTRON_OZONE_PLATFORM_HINT", "auto")
 
 ---------------------
 --  LOOK AND FEEL  --
@@ -145,6 +160,9 @@ local nv = io.open("/proc/driver/nvidia/version", "r")
 if nv then
     nv:close()
     hl.config({ cursor = { no_hardware_cursors = 1 } })
+    hl.env("LIBVA_DRIVER_NAME", "nvidia")
+    hl.env("__GLX_VENDOR_LIBRARY_NAME", "nvidia")
+    hl.env("NVD_BACKEND", "direct")
 end
 
 ----------------
@@ -167,11 +185,14 @@ hl.animation({ leaf = "border",           enabled = true, speed = 5,   bezier = 
 hl.animation({ leaf = "borderangle",      enabled = S.border_anim, speed = 60,  bezier = "linear", style = "loop" })
 hl.animation({ leaf = "layersIn",         enabled = true, speed = 3,   bezier = "over",   style = "slide" })
 hl.animation({ leaf = "layersOut",        enabled = true, speed = 2.5, bezier = "snap",   style = "fade" })
+hl.animation({ leaf = "fadeLayersIn",     enabled = true, speed = 1.5, bezier = "linear" })
+hl.animation({ leaf = "fadeLayersOut",    enabled = true, speed = 1.5, bezier = "linear" })
 hl.animation({ leaf = "workspaces",       enabled = true, speed = 4,   bezier = "smooth", style = "slidefade 12%" })
 hl.animation({ leaf = "specialWorkspace", enabled = true, speed = 4,   bezier = "over",   style = "slidefadevert 20%" })
 
 hl.layer_rule({ name = "launcher-anim",      match = { namespace = "^launcher$" },      animation = "popin 90%" })
 hl.layer_rule({ name = "notifications-anim", match = { namespace = "^notifications$" }, animation = "slide right" })
+hl.layer_rule({ name = "miniplayer-anim",     match = { namespace = "^miniplayer$" },    animation = "slide top" })
 hl.layer_rule({ name = "wallpaper-no-anim",  match = { namespace = "^mpvpaper$" },      no_anim = true })
 
 -------------------
@@ -280,15 +301,6 @@ hl.window_rule({
     float  = true,
     size   = "900 600",
     center = true,
-})
-
--- Мини-плеер: справа под панелью
-hl.window_rule({
-    name  = "mini-player",
-    match = { class = "^dotfiles\\.player$" },
-    float = true,
-    move  = "monitor_w-428 38",
-    pin   = true,
 })
 
 hl.window_rule({

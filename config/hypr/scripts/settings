@@ -247,6 +247,19 @@ def spawn(*cmd):
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
+def network_tool():
+    """nmtui, если сетью управляет NetworkManager, иначе impala (iwd)."""
+    active = subprocess.run(["systemctl", "is-active", "--quiet", "NetworkManager"]).returncode == 0
+    return "nmtui" if active and shutil.which("nmtui") else "impala"
+
+
+def launch(*cmd):
+    """Запустить фоновую программу сеанса (через uwsm, если сеанс под ним)."""
+    if os.environ.get("UWSM_FINALIZE_VARNAMES") and shutil.which("uwsm"):
+        cmd = ("uwsm", "app", "--", *cmd)
+    spawn(*cmd)
+
+
 def monitors():
     try:
         out = subprocess.run(["hyprctl", "monitors", "-j"], capture_output=True, text=True, timeout=3)
@@ -459,14 +472,15 @@ class SettingsWindow(Gtk.ApplicationWindow):
         term = s["terminal"]
         tools = [
             (_("Звук"), ["pavucontrol"]),
-            (_("Сеть (Wi-Fi)"), [term, "--class", "float", "-e", "impala"]),
+            (_("Сеть (Wi-Fi)"), [term, "--class", "float", "-e", network_tool()]),
             ("Bluetooth", [term, "--class", "float", "-e", "bluetoothctl"]),
             (_("Обновить систему"), [term, "--class", "float", "-e", "sh", "-c", _("paru -Syu; read -p 'Enter — закрыть'")]),
             (_("Папка dotfiles"), [s["files"], os.path.join(HOME, "dotfiles")]),
             (_("Перечитать Hyprland"), ["hyprctl", "reload"]),
         ]
         for label, cmd in tools:
-            needed = "bluetoothctl" if "bluetoothctl" in cmd else ("impala" if "impala" in cmd else cmd[0])
+            # для терминальных утилит проверяем и сам терминал, и утилиту
+            needed = cmd[4] if cmd[1:4] == ["--class", "float", "-e"] else cmd[0]
             if not shutil.which(cmd[0]) or not shutil.which(needed):
                 continue
             b = Gtk.Button(label=label)
@@ -525,12 +539,12 @@ class SettingsWindow(Gtk.ApplicationWindow):
             return
         subprocess.run(["hyprctl", "reload"], capture_output=True)
         if new["idle"] != old["idle"]:
-            spawn("uwsm", "app", "--", os.path.join(SCRIPTS, "idle"))
+            launch(os.path.join(SCRIPTS, "idle"))
         if new["wallpaper"] != old["wallpaper"]:
-            spawn("uwsm", "app", "--", os.path.join(SCRIPTS, "wallpaper"))
+            launch(os.path.join(SCRIPTS, "wallpaper"))
         self.s = new
         if new["lang"] != old["lang"]:
-            spawn("uwsm", "app", "--", os.path.join(SCRIPTS, "bar"))
+            launch(os.path.join(SCRIPTS, "bar"))
             global LANG
             LANG = detect_lang()
             self.rebuild()
@@ -557,9 +571,9 @@ class SettingsWindow(Gtk.ApplicationWindow):
             except FileNotFoundError:
                 pass
         subprocess.run(["hyprctl", "reload"], capture_output=True)
-        spawn("uwsm", "app", "--", os.path.join(SCRIPTS, "idle"))
-        spawn("uwsm", "app", "--", os.path.join(SCRIPTS, "wallpaper"))
-        spawn("uwsm", "app", "--", os.path.join(SCRIPTS, "bar"))
+        launch(os.path.join(SCRIPTS, "idle"))
+        launch(os.path.join(SCRIPTS, "wallpaper"))
+        launch(os.path.join(SCRIPTS, "bar"))
         global LANG
         LANG = detect_lang()
         self.rebuild()

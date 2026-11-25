@@ -17,5 +17,5 @@ case "$idx" in
     1) systemctl suspend ;;
     2) systemctl reboot ;;
     3) systemctl poweroff ;;
-    4) uwsm stop ;;
+    4) if [[ -n ${UWSM_FINALIZE_VARNAMES:-} ]]; then uwsm stop; else hyprctl dispatch 'hl.dsp.exit()'; fi ;;
 esac

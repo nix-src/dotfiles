@@ -44,7 +44,7 @@ Flags: `--links-only` (configs only), `--no-nvidia`.
 | Editor | neovim (no plugins, `quiet` colorscheme) |
 | Files | thunar |
 | Network / audio | iwd + impala / pipewire + pavucontrol |
-| Media | track from any MPRIS player in the bar; click opens the mini player (cover, seek, controls), right click play/pause, middle click next |
+| Media | current track from any MPRIS player (browser, Spotify, mpv…) in the bar, hidden when nothing plays; click opens the mini player under the cursor (cover, seek, controls; closes when the mouse leaves, on Esc or a second click), right click play/pause, middle click next |
 | Clipboard / screenshots | cliphist / grim + slurp |
 
 ## Keybindings
@@ -109,6 +109,12 @@ stops the inertia.
 
 Values are stored in `~/.config/dotfiles-local/`, outside the repo, so every machine keeps its own.
 The "Defaults" button deletes it and restores the repository defaults.
+
+## Session
+
+Pick **Hyprland (uwsm-managed)** on the login screen — services then run as systemd units.
+A plain **Hyprland** session works too: autostart, environment variables, the polkit agent
+and logout handle both.
 
 ## Language
 

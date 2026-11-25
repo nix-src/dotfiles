@@ -1,75 +1,88 @@
 #!/usr/bin/env python3
 """Модуль waybar custom/media: текущий трек из любого MPRIS-плеера.
 
-Печатает JSON для waybar при каждом изменении. Когда ничего не играет —
-только иконка ноты (по клику всё равно открывается мини-плеер).
+Работает на событиях libplayerctl (без опроса). Печатает JSON для waybar
+при каждом изменении. Когда ничего не играет и нет трека на паузе —
+печатает пустую строку, и waybar прячет модуль.
 """
 import html
 import json
-import os
-import subprocess
 import sys
-import time
 
-NOTE, PLAY, PAUSE = "\U000f075a", "\U000f040a", "\U000f03e4"
+import gi
+
+gi.require_version("Playerctl", "2.0")
+from gi.repository import GLib, Playerctl  # noqa: E402
+
+PLAY, PAUSE = "\U000f040a", "\U000f03e4"
 MAX = 40
-SEP = "\x1f"
-FMT = SEP.join(["{{status}}", "{{artist}}", "{{title}}", "{{playerName}}"])
 
 
-def lang():
-    try:
-        out = subprocess.run([os.path.expanduser("~/.config/hypr/scripts/lang")],
-                             capture_output=True, text=True, timeout=3)
-        return out.stdout.strip()
-    except (OSError, subprocess.TimeoutExpired):
-        return "en"
+def pick(manager):
+    """Активный плеер: сначала играющий, иначе на паузе."""
+    players = list(manager.props.players)
+    for want in (Playerctl.PlaybackStatus.PLAYING, Playerctl.PlaybackStatus.PAUSED):
+        for p in players:
+            try:
+                if p.props.playback_status == want and p.get_title():
+                    return p
+            except GLib.Error:
+                continue
+    return None
 
 
-IDLE_TIP = "Ничего не играет" if lang() == "ru" else "Nothing playing"
+class Module:
+    def __init__(self):
+        self.last = None
+        self.manager = Playerctl.PlayerManager()
+        self.manager.connect("name-appeared", lambda _m, name: self.add(name))
+        self.manager.connect("player-vanished", lambda *_: self.emit())
+        for name in self.manager.props.player_names:
+            self.add(name)
+        self.emit()
+        # страховка на случай, если плеер не прислал событие
+        GLib.timeout_add_seconds(3, lambda: self.emit() or True)
 
+    def add(self, name):
+        try:
+            player = Playerctl.Player.new_from_name(name)
+        except GLib.Error:
+            return
+        player.connect("playback-status", lambda *_: self.emit())
+        player.connect("metadata", lambda *_: self.emit())
+        self.manager.manage_player(player)
+        self.emit()
 
-def query():
-    try:
-        out = subprocess.run(["playerctl", "metadata", "--format", FMT],
-                             capture_output=True, text=True, timeout=2)
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-    parts = out.stdout.rstrip("\n").split(SEP)
-    if out.returncode != 0 or len(parts) != 4:
-        return None
-    status, artist, title, player = parts
-    if status == "Stopped" or not title:
-        return None
-    return status, artist, title, player
+    def render(self):
+        p = pick(self.manager)
+        if p is None:
+            return {"text": "", "class": "idle"}
+        try:
+            title, artist = p.get_title() or "", p.get_artist() or ""
+            playing = p.props.playback_status == Playerctl.PlaybackStatus.PLAYING
+        except GLib.Error:
+            return {"text": "", "class": "idle"}
+        label = f"{artist} — {title}" if artist else title
+        short = label if len(label) <= MAX else label[: MAX - 1] + "…"
+        return {
+            # иконка того же кегля, что и значки-кнопки в панели (15px)
+            "text": f"<span size='11.25pt'>{PLAY if playing else PAUSE}</span>  {html.escape(short)}",
+            "class": "playing" if playing else "paused",
+        }
 
-
-def render(info):
-    if info is None:
-        return {"text": NOTE, "class": "idle", "tooltip": IDLE_TIP}
-    status, artist, title, player = info
-    label = f"{artist} — {title}" if artist else title
-    short = label if len(label) <= MAX else label[: MAX - 1] + "…"
-    icon = PLAY if status == "Playing" else PAUSE
-    return {
-        "text": f"{icon}  {html.escape(short)}",
-        "class": "playing" if status == "Playing" else "paused",
-        "tooltip": html.escape(f"{label}\n{player}"),
-    }
-
-
-def main():
-    last = None
-    while True:
-        out = json.dumps(render(query()), ensure_ascii=False)
-        if out != last:
-            print(out, flush=True)
-            last = out
-        time.sleep(1)
+    def emit(self):
+        out = json.dumps(self.render(), ensure_ascii=False)
+        if out != self.last:
+            self.last = out
+            try:
+                print(out, flush=True)
+            except BrokenPipeError:
+                sys.exit(0)
 
 
 if __name__ == "__main__":
+    Module()
     try:
-        main()
-    except (KeyboardInterrupt, BrokenPipeError):
-        sys.exit(0)
+        GLib.MainLoop().run()
+    except KeyboardInterrupt:
+        pass
