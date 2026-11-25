@@ -1,6 +1,9 @@
 -- Hyprland (>= 0.57, Lua config)
 -- Монохром, без скруглений, без blur и теней.
 
+local hyprdir = (debug.getinfo(1, "S").source:match("^@(.*)/[^/]*$")) or (os.getenv("HOME") .. "/.config/hypr")
+package.path = hyprdir .. "/?.lua;" .. package.path
+
 local terminal    = "kitty"
 local fileManager = "thunar"
 local menu        = "fuzzel"
@@ -23,6 +26,7 @@ hl.monitor({
 -----------------
 
 hl.on("hyprland.start", function()
+    hl.exec_cmd("uwsm app -- " .. scripts .. "/wallpaper")
     hl.exec_cmd("uwsm app -- waybar")
     hl.exec_cmd("uwsm app -- mako")
     hl.exec_cmd("uwsm app -- hypridle")
@@ -31,6 +35,7 @@ hl.on("hyprland.start", function()
 end)
 
 -- Остальные переменные окружения — в ~/.config/uwsm/env
+hl.env("XCURSOR_THEME", "Adwaita")
 hl.env("XCURSOR_SIZE", "24")
 hl.env("HYPRCURSOR_SIZE", "24")
 
@@ -40,12 +45,12 @@ hl.env("HYPRCURSOR_SIZE", "24")
 
 hl.config({
     general = {
-        gaps_in     = 3,
-        gaps_out    = 6,
+        gaps_in     = 4,
+        gaps_out    = 8,
         border_size = 1,
         col = {
-            active_border   = "rgba(8a8a8aff)",
-            inactive_border = "rgba(222222ff)",
+            active_border   = { colors = { "rgba(b0b0b0ff)", "rgba(3a3a3aff)", "rgba(b0b0b0ff)" }, angle = 45 },
+            inactive_border = "rgba(1e1e1eff)",
         },
         resize_on_border = true,
         allow_tearing    = false,
@@ -56,6 +61,9 @@ hl.config({
         rounding         = 0,
         active_opacity   = 1.0,
         inactive_opacity = 1.0,
+        dim_inactive     = true,
+        dim_strength     = 0.12,
+        dim_special      = 0.4,
         shadow = { enabled = false },
         blur   = { enabled = false },
     },
@@ -68,9 +76,10 @@ hl.config({
         disable_hyprland_logo    = true,
         disable_splash_rendering = true,
         force_default_wallpaper  = 0,
-        background_color         = "rgb(0c0c0c)",
+        background_color         = "rgb(0b0b0b)",
         focus_on_activate        = true,
         middle_click_paste       = false,
+        float_force_onscreen     = 0,
     },
 
     input = {
@@ -86,14 +95,39 @@ hl.config({
     binds = { workspace_back_and_forth = true },
 })
 
--- Короткие и быстрые анимации
-hl.curve("snap", { type = "bezier", points = { {0.2, 1}, {0.3, 1} } })
-hl.animation({ leaf = "global",     enabled = true, speed = 3,   bezier = "snap" })
-hl.animation({ leaf = "windows",    enabled = true, speed = 3,   bezier = "snap", style = "popin 95%" })
-hl.animation({ leaf = "fade",       enabled = true, speed = 2.5, bezier = "snap" })
-hl.animation({ leaf = "border",     enabled = true, speed = 3,   bezier = "snap" })
-hl.animation({ leaf = "layers",     enabled = true, speed = 2.5, bezier = "snap", style = "fade" })
-hl.animation({ leaf = "workspaces", enabled = true, speed = 2.5, bezier = "snap", style = "fade" })
+-- NVIDIA: программный курсор, если аппаратный глючит
+local nv = io.open("/proc/driver/nvidia/version", "r")
+if nv then
+    nv:close()
+    hl.config({ cursor = { no_hardware_cursors = 1 } })
+end
+
+----------------
+--  ANIMATIONS --
+----------------
+
+hl.curve("snap",   { type = "bezier", points = { {0.2, 1},   {0.3, 1}    } })
+hl.curve("over",   { type = "bezier", points = { {0.05, 0.9}, {0.1, 1.06} } })
+hl.curve("smooth", { type = "bezier", points = { {0.4, 0},   {0.2, 1}    } })
+hl.curve("linear", { type = "bezier", points = { {0, 0},     {1, 1}      } })
+
+hl.animation({ leaf = "global",           enabled = true, speed = 4,   bezier = "snap" })
+hl.animation({ leaf = "windowsIn",        enabled = true, speed = 4,   bezier = "over",   style = "popin 80%" })
+hl.animation({ leaf = "windowsOut",       enabled = true, speed = 3,   bezier = "snap",   style = "popin 85%" })
+hl.animation({ leaf = "windowsMove",      enabled = true, speed = 4,   bezier = "snap" })
+hl.animation({ leaf = "fadeIn",           enabled = true, speed = 3,   bezier = "snap" })
+hl.animation({ leaf = "fadeOut",          enabled = true, speed = 3,   bezier = "snap" })
+hl.animation({ leaf = "fadeDim",          enabled = true, speed = 4,   bezier = "smooth" })
+hl.animation({ leaf = "border",           enabled = true, speed = 5,   bezier = "smooth" })
+hl.animation({ leaf = "borderangle",      enabled = true, speed = 60,  bezier = "linear", style = "loop" })
+hl.animation({ leaf = "layersIn",         enabled = true, speed = 3,   bezier = "over",   style = "slide" })
+hl.animation({ leaf = "layersOut",        enabled = true, speed = 2.5, bezier = "snap",   style = "fade" })
+hl.animation({ leaf = "workspaces",       enabled = true, speed = 4,   bezier = "smooth", style = "slidefade 12%" })
+hl.animation({ leaf = "specialWorkspace", enabled = true, speed = 4,   bezier = "over",   style = "slidefadevert 20%" })
+
+hl.layer_rule({ name = "launcher-anim",      match = { namespace = "^launcher$" },      animation = "popin 90%" })
+hl.layer_rule({ name = "notifications-anim", match = { namespace = "^notifications$" }, animation = "slide right" })
+hl.layer_rule({ name = "wallpaper-no-anim",  match = { namespace = "^mpvpaper$" },      no_anim = true })
 
 -------------------
 --  KEYBINDINGS  --
@@ -117,8 +151,8 @@ bind(mod .. " + SHIFT + R",      hl.dsp.reload_config())
 
 -- Окна
 bind(mod .. " + Q",              hl.dsp.window.close())
-bind(mod .. " + F",              hl.dsp.window.fullscreen())
-bind(mod .. " + SHIFT + F",      hl.dsp.window.fullscreen({ mode = "maximized" }))
+bind(mod .. " + SHIFT + F",      hl.dsp.window.fullscreen())
+bind(mod .. " + M",              hl.dsp.window.fullscreen({ mode = "maximized" }))
 bind(mod .. " + V",              hl.dsp.window.float({ action = "toggle" }))
 bind(mod .. " + P",              hl.dsp.window.pseudo())
 bind(mod .. " + T",              hl.dsp.layout("togglesplit"))
@@ -132,9 +166,9 @@ local dirs = {
 }
 for _, d in ipairs(dirs) do
     for _, key in ipairs({ d[1], d[2] }) do
-        bind(mod .. " + " .. key,            hl.dsp.focus({ direction = d[3] }))
-        bind(mod .. " + SHIFT + " .. key,    hl.dsp.window.move({ direction = d[3] }))
-        bind(mod .. " + CTRL + " .. key,     hl.dsp.window.resize({ x = d[4], y = d[5], relative = true }), { repeating = true })
+        bind(mod .. " + " .. key,         hl.dsp.focus({ direction = d[3] }))
+        bind(mod .. " + SHIFT + " .. key, hl.dsp.window.move({ direction = d[3] }))
+        bind(mod .. " + CTRL + " .. key,  hl.dsp.window.resize({ x = d[4], y = d[5], relative = true }), { repeating = true })
     end
 end
 
@@ -173,6 +207,9 @@ bind("XF86AudioNext",         exec("playerctl next"),       { locked = true })
 bind("XF86AudioPrev",         exec("playerctl previous"),   { locked = true })
 bind("XF86AudioPlay",         exec("playerctl play-pause"), { locked = true })
 bind("XF86AudioPause",        exec("playerctl play-pause"), { locked = true })
+
+-- Бесконечный холст (Super + F и панорамирование) — см. canvas.lua
+require("canvas").setup(mod)
 
 --------------------
 --  WINDOW RULES  --

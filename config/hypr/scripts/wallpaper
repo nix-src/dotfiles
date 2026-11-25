@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Анимированные обои (mpvpaper). Если mpvpaper или видео нет — остаётся
+# сплошной фон из misc.background_color.
+video="$HOME/.local/share/wallpapers/drift.mp4"
+
+pkill -x mpvpaper 2>/dev/null
+command -v mpvpaper >/dev/null && [[ -f $video ]] || exit 0
+
+# -p: пауза, когда обои закрыты окнами (почти ноль нагрузки)
+exec mpvpaper -p \
+    -o "no-audio loop hwdec=auto panscan=1.0 really-quiet" \
+    '*' "$video"

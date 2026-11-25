@@ -18,7 +18,13 @@ bash <(curl -fsSL https://raw.githubusercontent.com/nix-src/dotfiles/main/instal
    настраивает раннюю загрузку модулей и пересобирает initramfs;
 3. ставит Bluetooth, если он есть;
 4. делает симлинки `config/*` → `~/.config/*`, `home/.*` → `~/` (старые файлы — в `~/.dotfiles-backup/`);
-5. включает тёмную тему GTK/Qt, делает zsh оболочкой по умолчанию.
+5. генерирует анимированные обои (`extra/wallpaper/generate.py`) под разрешение монитора;
+6. ставит тему SDDM `mono` и включает SDDM, если другого экрана входа нет;
+7. включает тёмную тему GTK/Qt, делает zsh оболочкой по умолчанию.
+
+Конфликтующие пакеты (pulseaudio, драйверы NVIDIA из репозиториев для старых карт)
+удаляются автоматически, так что скрипт не останавливается на вопросах. Пароль sudo
+спрашивается один раз в начале.
 
 Флаги: `--links-only` (только конфиги), `--no-nvidia`.
 
@@ -28,6 +34,8 @@ bash <(curl -fsSL https://raw.githubusercontent.com/nix-src/dotfiles/main/instal
 |---|---|
 | Композитор | Hyprland (через uwsm) |
 | Панель | waybar |
+| Обои | mpvpaper + сгенерированное видео (пауза, когда закрыты окнами) |
+| Экран входа | SDDM, тема `mono` |
 | Лаунчер / меню | fuzzel |
 | Уведомления | mako |
 | Блокировка / idle | hyprlock / hypridle (блок через 10 мин, экран off через 15) |
@@ -45,7 +53,8 @@ bash <(curl -fsSL https://raw.githubusercontent.com/nix-src/dotfiles/main/instal
 | `Super + D` | запуск приложений |
 | `Super + E` / `Super + B` | файлы / браузер |
 | `Super + Q` | закрыть окно |
-| `Super + F` / `Super + Shift + F` | полный экран / развернуть |
+| `Super + F` | тайлинг ↔ бесконечный холст |
+| `Super + Shift + F` / `Super + M` | полный экран / развернуть |
 | `Super + V` | плавающее окно |
 | `Super + T` | сменить направление разделения |
 | `Super + ←↓↑→` или `H J K L` | фокус |
@@ -54,6 +63,9 @@ bash <(curl -fsSL https://raw.githubusercontent.com/nix-src/dotfiles/main/instal
 | `Super + 1..0` / `Super + Shift + 1..0` | рабочий стол / перенести окно |
 | `Super + Tab` | предыдущий рабочий стол |
 | `Super + S` / `Super + Shift + S` | scratchpad |
+| `Super + средняя кнопка` или `Super + Alt + ЛКМ` (тянуть) | двигать холст |
+| `Super + Alt + стрелки/HJKL`, `Super + Alt + колесо` | сдвиг холста |
+| `Super + Alt + C` | центрировать холст на активном окне |
 | `Super + C` | история буфера обмена |
 | `Super + N` | скрыть уведомления |
 | `Print` / `Shift + Print` | скриншот области / экрана |
@@ -62,6 +74,13 @@ bash <(curl -fsSL https://raw.githubusercontent.com/nix-src/dotfiles/main/instal
 | `Super + Shift + Escape` | меню питания |
 | `Super + Shift + R` | перечитать конфиг |
 | `Alt + Shift` | раскладка us/ru |
+
+## Бесконечный холст
+
+`Super + F` переключает текущий рабочий стол между тайлингом и холстом. На холсте
+все окна плавающие и могут уходить за край экрана; рабочий стол можно перетаскивать
+мышью. Когда холст активен, в панели горит индикатор `canvas`. Повторное `Super + F`
+возвращает окна в тайлинг. Логика — в `config/hypr/canvas.lua`.
 
 ## Изменение
 

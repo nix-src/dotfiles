@@ -9,6 +9,9 @@ hyprpolkitagent
 hyprlock
 hypridle
 hyprpicker
+sddm
+qt6-declarative
+qt6-svg
 
 # Панель, лаунчер, уведомления
 waybar
@@ -35,7 +38,6 @@ neovim
 pipewire
 pipewire-pulse
 pipewire-alsa
-pipewire-jack
 wireplumber
 pavucontrol
 playerctl
@@ -71,6 +73,11 @@ adwaita-cursors
 qt6ct
 qt5-wayland
 qt6-wayland
+
+# Обои (генерация и проигрывание)
+ffmpeg
+python
+mpv
 
 # Утилиты
 brightnessctl

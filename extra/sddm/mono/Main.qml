@@ -1,0 +1,237 @@
+// Минималистичная монохромная тема SDDM (Qt6).
+// Enter — войти, F2 / клик по строке сессии — сменить сессию.
+import QtQuick 2.15
+
+Rectangle {
+    id: root
+    width: 1920
+    height: 1080
+    color: "#0b0b0b"
+
+    readonly property color fg:     "#c8c8c8"
+    readonly property color bright: "#ededed"
+    readonly property color muted:  "#6b6b6b"
+    readonly property color dim:    "#3a3a3a"
+    readonly property color field:  "#121212"
+    readonly property color danger: "#b36b6b"
+    readonly property string fontName: config.font || "monospace"
+
+    property int sessionIndex: sessionModel.lastIndex >= 0 ? sessionModel.lastIndex : 0
+
+    function doLogin() {
+        error.text = ""
+        sddm.login(user.text, password.text, root.sessionIndex)
+    }
+
+    function sessionName(i, count) {
+        var it = count > 0 ? sessionNames.itemAt(i) : null
+        return it ? it.sname : ""
+    }
+
+    // Имена сессий и пользователей из моделей SDDM
+    Repeater {
+        id: sessionNames
+        model: sessionModel
+        delegate: Item { property string sname: model.name }
+    }
+
+    Repeater {
+        id: userNames
+        model: userModel
+        delegate: Item { property string uname: model.name }
+        onItemAdded: function(index, item) {
+            if (user.text === "" && index === 0) user.text = item.uname
+        }
+    }
+
+    Connections {
+        target: sddm
+        function onLoginFailed() {
+            password.text = ""
+            error.text = "login failed"
+            password.forceActiveFocus()
+        }
+    }
+
+    Image {
+        anchors.fill: parent
+        source: config.background || ""
+        fillMode: Image.PreserveAspectCrop
+        visible: status === Image.Ready
+    }
+
+    // ---------------------------------------------------------------- центр
+    Column {
+        anchors.centerIn: parent
+        anchors.verticalCenterOffset: -40
+        spacing: 14
+
+        Text {
+            id: clock
+            anchors.horizontalCenter: parent.horizontalCenter
+            color: root.bright
+            font.family: root.fontName
+            font.pixelSize: 84
+            text: Qt.formatTime(new Date(), "HH:mm")
+        }
+
+        Text {
+            id: date
+            anchors.horizontalCenter: parent.horizontalCenter
+            color: root.muted
+            font.family: root.fontName
+            font.pixelSize: 15
+            text: Qt.formatDate(new Date(), "dddd, d MMMM")
+        }
+
+        Item { width: 1; height: 26 }
+
+        // имя пользователя
+        Rectangle {
+            width: 300; height: 38
+            anchors.horizontalCenter: parent.horizontalCenter
+            color: root.field
+            border.width: 1
+            border.color: user.activeFocus ? root.muted : root.dim
+
+            Text {
+                anchors.centerIn: parent
+                visible: user.text === ""
+                color: root.dim
+                font.family: root.fontName
+                font.pixelSize: 13
+                text: "user"
+            }
+
+            TextInput {
+                id: user
+                anchors.fill: parent
+                anchors.leftMargin: 12; anchors.rightMargin: 12
+                verticalAlignment: TextInput.AlignVCenter
+                horizontalAlignment: TextInput.AlignHCenter
+                color: root.fg
+                font.family: root.fontName
+                font.pixelSize: 14
+                text: userModel.lastUser
+                clip: true
+                selectByMouse: true
+                KeyNavigation.tab: password
+                Keys.onReturnPressed: password.forceActiveFocus()
+                Keys.onEnterPressed: password.forceActiveFocus()
+            }
+        }
+
+        // пароль
+        Rectangle {
+            width: 300; height: 38
+            anchors.horizontalCenter: parent.horizontalCenter
+            color: root.field
+            border.width: 1
+            border.color: error.text !== "" ? root.danger : (password.activeFocus ? root.muted : root.dim)
+
+            TextInput {
+                id: password
+                anchors.fill: parent
+                anchors.leftMargin: 12; anchors.rightMargin: 12
+                verticalAlignment: TextInput.AlignVCenter
+                horizontalAlignment: TextInput.AlignHCenter
+                color: root.fg
+                font.family: root.fontName
+                font.pixelSize: 14
+                echoMode: TextInput.Password
+                passwordCharacter: "•"
+                clip: true
+                focus: true
+                KeyNavigation.backtab: user
+                Keys.onReturnPressed: root.doLogin()
+                Keys.onEnterPressed: root.doLogin()
+            }
+
+            Text {
+                anchors.centerIn: parent
+                visible: password.text === "" && !password.activeFocus
+                color: root.dim
+                font.family: root.fontName
+                font.pixelSize: 13
+                text: "password"
+            }
+        }
+
+        Text {
+            id: error
+            anchors.horizontalCenter: parent.horizontalCenter
+            color: root.danger
+            font.family: root.fontName
+            font.pixelSize: 12
+            text: ""
+            height: 16
+        }
+    }
+
+    // ------------------------------------------------------- низ: сессия
+    Text {
+        id: session
+        anchors.left: parent.left
+        anchors.bottom: parent.bottom
+        anchors.margins: 24
+        color: sessionArea.containsMouse ? root.fg : root.muted
+        font.family: root.fontName
+        font.pixelSize: 13
+        text: "session  " + root.sessionName(root.sessionIndex, sessionNames.count).toLowerCase()
+
+        MouseArea {
+            id: sessionArea
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: root.sessionIndex = (root.sessionIndex + 1) % Math.max(1, sessionModel.rowCount())
+        }
+    }
+
+    // ------------------------------------------------ низ: питание
+    Row {
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.margins: 24
+        spacing: 24
+
+        Repeater {
+            model: [
+                { label: "suspend",  can: sddm.canSuspend,  act: function() { sddm.suspend() } },
+                { label: "reboot",   can: sddm.canReboot,   act: function() { sddm.reboot() } },
+                { label: "shutdown", can: sddm.canPowerOff, act: function() { sddm.powerOff() } }
+            ]
+            delegate: Text {
+                visible: modelData.can
+                color: area.containsMouse ? root.bright : root.muted
+                font.family: root.fontName
+                font.pixelSize: 13
+                text: modelData.label
+                MouseArea {
+                    id: area
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: modelData.act()
+                }
+            }
+        }
+    }
+
+    Timer {
+        interval: 1000; running: true; repeat: true
+        onTriggered: {
+            clock.text = Qt.formatTime(new Date(), "HH:mm")
+            date.text = Qt.formatDate(new Date(), "dddd, d MMMM")
+        }
+    }
+
+    Keys.onPressed: function(event) {
+        if (event.key === Qt.Key_F2) {
+            root.sessionIndex = (root.sessionIndex + 1) % Math.max(1, sessionModel.rowCount())
+            event.accepted = true
+        }
+    }
+
+    Component.onCompleted: password.forceActiveFocus()
+}

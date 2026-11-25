@@ -1,17 +1,24 @@
 {
     "layer": "top",
     "position": "top",
-    "height": 24,
+    "height": 30,
     "spacing": 0,
 
-    "modules-left": ["hyprland/workspaces", "hyprland/submap"],
+    "modules-left": ["hyprland/workspaces", "custom/canvas"],
     "modules-center": ["clock"],
-    "modules-right": ["tray", "hyprland/language", "cpu", "memory", "disk", "network", "pulseaudio", "battery"],
+    "modules-right": ["tray", "hyprland/language", "cpu", "memory", "disk", "pulseaudio", "battery"],
 
     "hyprland/workspaces": {
         "format": "{id}",
         "on-click": "activate",
         "sort-by-number": true
+    },
+
+    "custom/canvas": {
+        "exec": "cat \"$XDG_RUNTIME_DIR/hypr-canvas-bar\" 2>/dev/null",
+        "interval": "once",
+        "signal": 8,
+        "tooltip": false
     },
 
     "hyprland/language": {
@@ -51,16 +58,6 @@
         "tooltip-format": "{used} / {total}",
         "path": "/",
         "interval": 60
-    },
-
-    "network": {
-        "format-wifi": "wifi {essid}",
-        "format-ethernet": "eth",
-        "format-linked": "no ip",
-        "format-disconnected": "offline",
-        "tooltip-format": "{ifname}  {ipaddr}",
-        "tooltip-format-wifi": "{ifname}  {ipaddr}  {signalStrength}%",
-        "on-click": "kitty --class float -e impala"
     },
 
     "pulseaudio": {
