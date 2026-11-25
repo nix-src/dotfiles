@@ -54,12 +54,17 @@ local function save_state()
     f:close()
 end
 
--- Индикатор в waybar (модуль custom/canvas, сигнал 8)
+-- Индикатор в waybar (модуль custom/canvas, сигнал 8). Обновляем, только
+-- когда текст действительно изменился (не дёргаем waybar на каждом переключении).
+local bar_text = nil
 local function update_bar()
     local ws = hl.get_active_workspace()
+    local text = (ws and ws.id and active[ws.id]) and "∞ infinite" or ""
+    if text == bar_text then return end
+    bar_text = text
     local f = io.open(bar_file, "w")
     if f then
-        f:write((ws and ws.id and active[ws.id]) and "∞ infinite" or "")
+        f:write(text)
         f:close()
     end
     hl.exec_cmd("pkill -RTMIN+8 waybar")

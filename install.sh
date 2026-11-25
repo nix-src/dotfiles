@@ -204,10 +204,11 @@ setup_gaming() {
             sudo pacman -S --needed --noconfirm lib32-nvidia-utils
         fi
     fi
-    if grep -qiE 'amd|ati|radeon' <<<"$gpus"; then
+    # регистр важен: в «NVIDIA Corporation» тоже есть «ati»
+    if grep -qE 'AMD|ATI|Radeon' <<<"$gpus"; then
         sudo pacman -S --needed --noconfirm lib32-mesa lib32-vulkan-radeon vulkan-radeon
     fi
-    if grep -qi intel <<<"$gpus"; then
+    if grep -q 'Intel' <<<"$gpus"; then
         sudo pacman -S --needed --noconfirm lib32-mesa lib32-vulkan-intel vulkan-intel
     fi
 
@@ -370,7 +371,7 @@ fi
 
 msg "$(t "Done." "Готово.")"
 if ((NEED_REBOOT)); then
-    warn "$(t "Reboot to load the NVIDIA driver." "Перезагрузи компьютер, чтобы загрузился драйвер NVIDIA.")"
+    warn "$(t "Reboot to apply everything (new driver / groups)." "Перезагрузи компьютер, чтобы всё применилось (новый драйвер / группы).")"
 else
     msg "$(t "Log out and back in (Super+Shift+Escape -> logout) to apply everything." "Перезайди в сессию (Super+Shift+Escape -> выход), чтобы всё применилось.")"
 fi

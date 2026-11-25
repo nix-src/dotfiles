@@ -113,8 +113,7 @@ hl.config({
             inactive_border = "rgba(1e1e1eff)",
         },
         resize_on_border = true,
-        allow_tearing    = false,
-        layout           = "dwindle",
+        layout           = "dwindle",      -- allow_tearing задаётся в разделе «Игры»
     },
 
     decoration = {
@@ -214,7 +213,7 @@ bind(mod .. " + C",              exec(scripts .. "/clipboard"))
 bind(mod .. " + N",              exec("makoctl dismiss --all"))
 
 -- Сессия
-bind(mod .. " + Escape",         exec("loginctl lock-session"))
+bind(mod .. " + Escape",         exec(scripts .. "/lock"))
 bind(mod .. " + SHIFT + Escape", exec(scripts .. "/powermenu"))
 bind(mod .. " + SHIFT + R",      hl.dsp.reload_config())
 

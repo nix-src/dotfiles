@@ -13,7 +13,7 @@ idx="$(for i in "${!labels[@]}"; do printf '%s  %s\n' "${icons[$i]}" "${labels[$
     | fuzzel --dmenu --index --prompt "$prompt" --lines 5 --width 24)" || exit 0
 
 case "$idx" in
-    0) loginctl lock-session ;;
+    0) exec "$HOME/.config/hypr/scripts/lock" ;;
     1) systemctl suspend ;;
     2) systemctl reboot ;;
     3) systemctl poweroff ;;

@@ -597,7 +597,13 @@ class SettingsWindow(Gtk.ApplicationWindow):
             return
         errors = subprocess.run(["hyprctl", "configerrors"], capture_output=True, text=True).stdout.strip()
         self.status.set_text(_("Ошибка в настройках — см. уведомление Hyprland") if errors else _("Применено"))
-        GLib.timeout_add_seconds(4, lambda: self.status.set_text("") or False)
+        GLib.timeout_add_seconds(4, self.clear_status)
+
+    def clear_status(self):
+        # окно могли закрыть раньше, чем сработал таймер
+        if self.get_mapped():
+            self.status.set_text("")
+        return False
 
     def on_reset(self, _btn):
         dialog = Gtk.AlertDialog(message=_("Сбросить все настройки?"),
