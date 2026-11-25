@@ -1,0 +1,25 @@
+{
+    "cpu": {
+        "format": "цп {usage}%"
+    },
+    "memory": {
+        "format": "озу {percentage}%"
+    },
+    "disk": {
+        "format": "диск {percentage_used}%"
+    },
+    "pulseaudio": {
+        "format": "звук {volume}%",
+        "format-muted": "звук выкл"
+    },
+    "battery": {
+        "format": "бат {capacity}%",
+        "format-charging": "бат {capacity}%+"
+    },
+    "custom/settings": {
+        "tooltip-format": "настройки"
+    },
+    "custom/power": {
+        "tooltip-format": "питание"
+    }
+}

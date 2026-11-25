@@ -21,4 +21,8 @@ case "${1:-area}" in
 esac
 
 wl-copy --type image/png < "$file"
-notify-send -a screenshot -u low "screenshot" "$(basename "$file")"
+if [[ "$("$HOME/.config/hypr/scripts/lang")" == ru ]]; then
+    notify-send -a screenshot -u low "Скриншот" "$(basename "$file") — скопирован в буфер"
+else
+    notify-send -a screenshot -u low "Screenshot" "$(basename "$file") — copied to clipboard"
+fi

@@ -16,6 +16,10 @@ Rectangle {
     readonly property color danger: "#b36b6b"
     readonly property string fontName: config.font || "monospace"
 
+    // Язык по системной локали: русский для ru_*, иначе английский
+    readonly property bool ru: Qt.locale().name.indexOf("ru") === 0
+    function tr(en, ruText) { return root.ru ? ruText : en }
+
     property int sessionIndex: sessionModel.lastIndex >= 0 ? sessionModel.lastIndex : 0
 
     function doLogin() {
@@ -48,7 +52,7 @@ Rectangle {
         target: sddm
         function onLoginFailed() {
             password.text = ""
-            error.text = "login failed"
+            error.text = root.tr("login failed", "неверный пароль")
             password.forceActiveFocus()
         }
     }
@@ -81,7 +85,7 @@ Rectangle {
             color: root.muted
             font.family: root.fontName
             font.pixelSize: 15
-            text: Qt.formatDate(new Date(), "dddd, d MMMM")
+            text: Qt.locale().toString(new Date(), "dddd, d MMMM")
         }
 
         Item { width: 1; height: 26 }
@@ -100,7 +104,7 @@ Rectangle {
                 color: root.dim
                 font.family: root.fontName
                 font.pixelSize: 13
-                text: "user"
+                text: root.tr("user", "пользователь")
             }
 
             TextInput {
@@ -153,7 +157,7 @@ Rectangle {
                 color: root.dim
                 font.family: root.fontName
                 font.pixelSize: 13
-                text: "password"
+                text: root.tr("password", "пароль")
             }
         }
 
@@ -177,7 +181,7 @@ Rectangle {
         color: sessionArea.containsMouse ? root.fg : root.muted
         font.family: root.fontName
         font.pixelSize: 13
-        text: "session  " + root.sessionName(root.sessionIndex, sessionNames.count).toLowerCase()
+        text: root.tr("session", "сеанс") + "  " + root.sessionName(root.sessionIndex, sessionNames.count).toLowerCase()
 
         MouseArea {
             id: sessionArea
@@ -197,9 +201,9 @@ Rectangle {
 
         Repeater {
             model: [
-                { label: "suspend",  can: sddm.canSuspend,  act: function() { sddm.suspend() } },
-                { label: "reboot",   can: sddm.canReboot,   act: function() { sddm.reboot() } },
-                { label: "shutdown", can: sddm.canPowerOff, act: function() { sddm.powerOff() } }
+                { label: root.tr("suspend", "сон"),  can: sddm.canSuspend,  act: function() { sddm.suspend() } },
+                { label: root.tr("reboot", "перезагрузка"),  can: sddm.canReboot,   act: function() { sddm.reboot() } },
+                { label: root.tr("shutdown", "выключение"), can: sddm.canPowerOff, act: function() { sddm.powerOff() } }
             ]
             delegate: Text {
                 visible: modelData.can
@@ -222,7 +226,7 @@ Rectangle {
         interval: 1000; running: true; repeat: true
         onTriggered: {
             clock.text = Qt.formatTime(new Date(), "HH:mm")
-            date.text = Qt.formatDate(new Date(), "dddd, d MMMM")
+            date.text = Qt.locale().toString(new Date(), "dddd, d MMMM")
         }
     }
 

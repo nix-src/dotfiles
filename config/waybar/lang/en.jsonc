@@ -1,0 +1,25 @@
+{
+    "cpu": {
+        "format": "cpu {usage}%"
+    },
+    "memory": {
+        "format": "mem {percentage}%"
+    },
+    "disk": {
+        "format": "disk {percentage_used}%"
+    },
+    "pulseaudio": {
+        "format": "vol {volume}%",
+        "format-muted": "vol mute"
+    },
+    "battery": {
+        "format": "bat {capacity}%",
+        "format-charging": "bat {capacity}%+"
+    },
+    "custom/settings": {
+        "tooltip-format": "settings"
+    },
+    "custom/power": {
+        "tooltip-format": "power"
+    }
+}

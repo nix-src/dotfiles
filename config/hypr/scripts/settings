@@ -24,6 +24,96 @@ LOCAL = os.path.join(HOME, ".config", "dotfiles-local")
 SCRIPTS = os.path.join(HOME, ".config", "hypr", "scripts")
 JSON_PATH = os.path.join(LOCAL, "settings.json")
 
+# ------------------------------------------------------------------- язык
+
+def detect_lang():
+    try:
+        out = subprocess.run([os.path.join(SCRIPTS, "lang")], capture_output=True, text=True, timeout=3)
+        return "ru" if out.stdout.strip() == "ru" else "en"
+    except (OSError, subprocess.TimeoutExpired):
+        return "ru" if os.environ.get("LANG", "").startswith("ru") else "en"
+
+
+LANG = detect_lang()
+
+EN = {
+    'анимированные': 'animated',
+    'статичные': 'static',
+    'нет (сплошной фон)': 'none (solid color)',
+    'Настройки': 'Settings',
+    'Экран': 'Display',
+    'Нет данных от Hyprland': 'No data from Hyprland',
+    'авто (preferred)': 'auto (preferred)',
+    'Разрешение и частота': 'Resolution and refresh rate',
+    'Масштаб': 'Scale',
+    'Позиция': 'Position',
+    'auto или XxY, например 1920x0': 'auto or XxY, e.g. 1920x0',
+    'Клавиатура и мышь': 'Keyboard and mouse',
+    'клавиатура': 'keyboard',
+    'Раскладки': 'Layouts',
+    'через запятую, например us,ru,ua': 'comma separated, e.g. us,ru,ua',
+    'Переключение раскладки': 'Layout switch',
+    'Скорость повтора клавиш': 'Key repeat rate',
+    'символов в секунду': 'characters per second',
+    'Задержка до повтора': 'Repeat delay',
+    'мс': 'ms',
+    'мышь': 'mouse',
+    'Чувствительность': 'Sensitivity',
+    'Без ускорения': 'No acceleration',
+    'одинаковая скорость при любом движении': 'same speed for any movement',
+    'Естественная прокрутка': 'Natural scrolling',
+    'Внешний вид': 'Appearance',
+    'Отступ между окнами': 'Gap between windows',
+    'Отступ от краёв экрана': 'Gap to screen edges',
+    'Толщина рамки': 'Border width',
+    'Анимации': 'Animations',
+    'Вращающаяся рамка активного окна': 'Rotating border on active window',
+    'Затемнять неактивные окна': 'Dim inactive windows',
+    'Обои': 'Wallpaper',
+    'Бесконечный холст': 'Infinite canvas',
+    'Разъезд окон': 'Window spread',
+    'насколько окна расходятся при входе в холст': 'how far windows move apart when entering the canvas',
+    'Масштаб окон': 'Window scale',
+    'размер окон после входа в холст': 'window size after entering the canvas',
+    'Запас за краем': 'Edge margin',
+    'насколько можно уехать за крайние окна (доля экрана)': 'how far you can pan past the outermost windows (fraction of screen)',
+    'Инерция': 'Inertia',
+    'больше — дольше докатывается': 'higher — glides longer',
+    'Питание': 'Power',
+    'Блокировка через': 'Lock after',
+    'минут бездействия, 0 — никогда': 'minutes of inactivity, 0 — never',
+    'Выключение экрана через': 'Screen off after',
+    'минут, 0 — никогда': 'minutes, 0 — never',
+    'Сон через': 'Suspend after',
+    'Приложения': 'Applications',
+    'Терминал': 'Terminal',
+    'Браузер': 'Browser',
+    'Файловый менеджер': 'File manager',
+    'Система': 'System',
+    'Звук': 'Sound',
+    'Сеть (Wi-Fi)': 'Network (Wi-Fi)',
+    'Обновить систему': 'Update system', "paru -Syu; read -p 'Enter — закрыть'": "paru -Syu; read -p 'Press Enter to close'", 'Папка dotfiles': 'Dotfiles folder',
+    'Перечитать Hyprland': 'Reload Hyprland',
+    'По умолчанию': 'Defaults',
+    'Применить': 'Apply',
+    'Ошибка в настройках — см. уведомление Hyprland': 'Settings error — see the Hyprland notification',
+    'Применено': 'Applied',
+    'Сбросить все настройки?': 'Reset all settings?',
+    'Будут восстановлены значения по умолчанию.': 'Default values will be restored.',
+    'Отмена': 'Cancel',
+    'Сбросить': 'Reset',
+    'Ошибка записи: ': 'Write error: ',
+    'Язык интерфейса': 'Interface language',
+    'авто (по системе)': 'auto (system)',
+    'применится после перезапуска панели и окон': 'applies to the bar, menus and this window',
+}
+
+
+def _(text):
+    """Строки в коде — на русском; для английского берётся перевод из EN."""
+    return text if LANG == "ru" else EN.get(text, text)
+
+
 # Должны совпадать со значениями по умолчанию в hyprland.lua / canvas.lua
 DEFAULTS = {
     "monitors": {},
@@ -46,6 +136,7 @@ DEFAULTS = {
     "canvas": {"spread": 1.35, "shrink": 0.82, "pad": 0.35, "friction": 0.94},
     "wallpaper": "animated",
     "idle": {"lock": 10, "screen_off": 15, "suspend": 0},
+    "lang": "auto",
 }
 
 LAYOUT_SWITCH = [
@@ -54,6 +145,7 @@ LAYOUT_SWITCH = [
     ("Super + Space", "grp:win_space_toggle"),
     ("Caps Lock", "grp:caps_toggle"),
 ]
+LANGS = [("авто (по системе)", "auto"), ("English", "en"), ("Русский", "ru")]
 WALLPAPER = [("анимированные", "animated"), ("статичные", "static"), ("нет (сплошной фон)", "none")]
 
 CSS = """
@@ -117,13 +209,16 @@ def write_files(s):
     with open(JSON_PATH, "w") as f:
         json.dump(s, f, indent=2, ensure_ascii=False)
 
-    lua = {k: v for k, v in s.items() if k not in ("wallpaper", "idle")}
+    lua = {k: v for k, v in s.items() if k not in ("wallpaper", "idle", "lang")}
     with open(os.path.join(LOCAL, "settings.lua"), "w") as f:
         f.write("-- Сгенерировано окном настроек. Правки вручную будут перезаписаны.\n")
         f.write("return " + lua_value(lua) + "\n")
 
     with open(os.path.join(LOCAL, "wallpaper"), "w") as f:
         f.write(s["wallpaper"])
+
+    with open(os.path.join(LOCAL, "lang"), "w") as f:
+        f.write(s["lang"])
 
     idle = s["idle"]
     parts = [
@@ -214,7 +309,7 @@ def entry(value, width=220):
 
 
 def dropdown(options, current):
-    labels = [o[0] for o in options]
+    labels = [_(o[0]) for o in options]
     w = Gtk.DropDown.new_from_strings(labels)
     values = [o[1] for o in options]
     w.set_selected(values.index(current) if current in values else 0)
@@ -230,7 +325,7 @@ def dd_value(w):
 
 class SettingsWindow(Gtk.ApplicationWindow):
     def __init__(self, app):
-        super().__init__(application=app, title="Настройки")
+        super().__init__(application=app, title=_("Настройки"))
         self.set_default_size(900, 620)
         self.s = load_settings()
         self.w = {}
@@ -264,11 +359,11 @@ class SettingsWindow(Gtk.ApplicationWindow):
         s, w = self.s, self.w
 
         # Экран
-        p = self.page("display", "Экран")
+        p = self.page("display", _("Экран"))
         self.mon = {}
         mons = monitors()
         if not mons:
-            p.append(Gtk.Label(label="Нет данных от Hyprland", xalign=0))
+            p.append(Gtk.Label(label=_("Нет данных от Hyprland"), xalign=0))
         for m in mons:
             name = m["name"]
             saved = s["monitors"].get(name, {})
@@ -277,96 +372,98 @@ class SettingsWindow(Gtk.ApplicationWindow):
                 v = mode.removesuffix("Hz")
                 if v not in [x[1] for x in modes]:
                     modes.append((mode, v))
-            modes.insert(0, ("авто (preferred)", "preferred"))
+            modes.insert(0, (_("авто (preferred)"), "preferred"))
             p.append(section(f"{name} — {m.get('description', '')}"))
             mode_w = dropdown(modes, saved.get("mode", "preferred"))
             scale_w = spin(0.5, 3, 0.25, float(saved.get("scale", m.get("scale", 1))), 2)
             pos_w = entry(saved.get("position", "auto"), 140)
-            p.append(row("Разрешение и частота", mode_w))
-            p.append(row("Масштаб", scale_w))
-            p.append(row("Позиция", pos_w, "auto или XxY, например 1920x0"))
+            p.append(row(_("Разрешение и частота"), mode_w))
+            p.append(row(_("Масштаб"), scale_w))
+            p.append(row(_("Позиция"), pos_w, _("auto или XxY, например 1920x0")))
             self.mon[name] = (mode_w, scale_w, pos_w)
 
         # Ввод
-        p = self.page("input", "Клавиатура и мышь")
-        p.append(section("клавиатура"))
+        p = self.page("input", _("Клавиатура и мышь"))
+        p.append(section(_("клавиатура")))
         w["kb_layout"] = entry(s["kb_layout"])
-        p.append(row("Раскладки", w["kb_layout"], "через запятую, например us,ru,ua"))
+        p.append(row(_("Раскладки"), w["kb_layout"], _("через запятую, например us,ru,ua")))
         sw = [o for o in s["kb_options"].split(",") if o.startswith("grp:")]
         w["kb_switch"] = dropdown(LAYOUT_SWITCH, sw[0] if sw else "")
-        p.append(row("Переключение раскладки", w["kb_switch"]))
+        p.append(row(_("Переключение раскладки"), w["kb_switch"]))
         w["repeat_rate"] = spin(10, 80, 1, s["repeat_rate"])
-        p.append(row("Скорость повтора клавиш", w["repeat_rate"], "символов в секунду"))
+        p.append(row(_("Скорость повтора клавиш"), w["repeat_rate"], _("символов в секунду")))
         w["repeat_delay"] = spin(150, 800, 10, s["repeat_delay"])
-        p.append(row("Задержка до повтора", w["repeat_delay"], "мс"))
-        p.append(section("мышь"))
+        p.append(row(_("Задержка до повтора"), w["repeat_delay"], _("мс")))
+        p.append(section(_("мышь")))
         w["sensitivity"] = slider(-1, 1, 0.05, s["sensitivity"])
-        p.append(row("Чувствительность", w["sensitivity"]))
+        p.append(row(_("Чувствительность"), w["sensitivity"]))
         w["accel_flat"] = switch(s["accel_flat"])
-        p.append(row("Без ускорения", w["accel_flat"], "одинаковая скорость при любом движении"))
+        p.append(row(_("Без ускорения"), w["accel_flat"], _("одинаковая скорость при любом движении")))
         w["natural_scroll"] = switch(s["natural_scroll"])
-        p.append(row("Естественная прокрутка", w["natural_scroll"]))
+        p.append(row(_("Естественная прокрутка"), w["natural_scroll"]))
 
         # Внешний вид
-        p = self.page("look", "Внешний вид")
+        p = self.page("look", _("Внешний вид"))
         w["gaps_in"] = spin(0, 40, 1, s["gaps_in"])
-        p.append(row("Отступ между окнами", w["gaps_in"]))
+        p.append(row(_("Отступ между окнами"), w["gaps_in"]))
         w["gaps_out"] = spin(0, 60, 1, s["gaps_out"])
-        p.append(row("Отступ от краёв экрана", w["gaps_out"]))
+        p.append(row(_("Отступ от краёв экрана"), w["gaps_out"]))
         w["border_size"] = spin(0, 6, 1, s["border_size"])
-        p.append(row("Толщина рамки", w["border_size"]))
+        p.append(row(_("Толщина рамки"), w["border_size"]))
         w["animations"] = switch(s["animations"])
-        p.append(row("Анимации", w["animations"]))
+        p.append(row(_("Анимации"), w["animations"]))
         w["border_anim"] = switch(s["border_anim"])
-        p.append(row("Вращающаяся рамка активного окна", w["border_anim"]))
+        p.append(row(_("Вращающаяся рамка активного окна"), w["border_anim"]))
         w["dim_inactive"] = switch(s["dim_inactive"])
-        p.append(row("Затемнять неактивные окна", w["dim_inactive"]))
+        p.append(row(_("Затемнять неактивные окна"), w["dim_inactive"]))
         w["wallpaper"] = dropdown(WALLPAPER, s["wallpaper"])
-        p.append(row("Обои", w["wallpaper"]))
+        p.append(row(_("Обои"), w["wallpaper"]))
+        w["lang"] = dropdown(LANGS, s["lang"])
+        p.append(row(_("Язык интерфейса"), w["lang"], _("применится после перезапуска панели и окон")))
 
         # Холст
         c = s["canvas"]
-        p = self.page("canvas", "Бесконечный холст")
+        p = self.page("canvas", _("Бесконечный холст"))
         w["spread"] = slider(1.0, 2.5, 0.05, c["spread"])
-        p.append(row("Разъезд окон", w["spread"], "насколько окна расходятся при входе в холст"))
+        p.append(row(_("Разъезд окон"), w["spread"], _("насколько окна расходятся при входе в холст")))
         w["shrink"] = slider(0.4, 1.0, 0.02, c["shrink"])
-        p.append(row("Масштаб окон", w["shrink"], "размер окон после входа в холст"))
+        p.append(row(_("Масштаб окон"), w["shrink"], _("размер окон после входа в холст")))
         w["pad"] = slider(0.0, 1.5, 0.05, c["pad"])
-        p.append(row("Запас за краем", w["pad"], "насколько можно уехать за крайние окна (доля экрана)"))
+        p.append(row(_("Запас за краем"), w["pad"], _("насколько можно уехать за крайние окна (доля экрана)")))
         w["friction"] = slider(0.80, 0.98, 0.01, c["friction"])
-        p.append(row("Инерция", w["friction"], "больше — дольше докатывается"))
+        p.append(row(_("Инерция"), w["friction"], _("больше — дольше докатывается")))
 
         # Питание
         i = s["idle"]
-        p = self.page("power", "Питание")
+        p = self.page("power", _("Питание"))
         w["lock"] = spin(0, 240, 1, i["lock"])
-        p.append(row("Блокировка через", w["lock"], "минут бездействия, 0 — никогда"))
+        p.append(row(_("Блокировка через"), w["lock"], _("минут бездействия, 0 — никогда")))
         w["screen_off"] = spin(0, 240, 1, i["screen_off"])
-        p.append(row("Выключение экрана через", w["screen_off"], "минут, 0 — никогда"))
+        p.append(row(_("Выключение экрана через"), w["screen_off"], _("минут, 0 — никогда")))
         w["suspend"] = spin(0, 480, 5, i["suspend"])
-        p.append(row("Сон через", w["suspend"], "минут, 0 — никогда"))
+        p.append(row(_("Сон через"), w["suspend"], _("минут, 0 — никогда")))
 
         # Приложения
-        p = self.page("apps", "Приложения")
+        p = self.page("apps", _("Приложения"))
         w["terminal"] = entry(s["terminal"])
-        p.append(row("Терминал", w["terminal"], "Super + Enter"))
+        p.append(row(_("Терминал"), w["terminal"], "Super + Enter"))
         w["browser"] = entry(s["browser"])
-        p.append(row("Браузер", w["browser"], "Super + B"))
+        p.append(row(_("Браузер"), w["browser"], "Super + B"))
         w["files"] = entry(s["files"])
-        p.append(row("Файловый менеджер", w["files"], "Super + E"))
+        p.append(row(_("Файловый менеджер"), w["files"], "Super + E"))
 
         # Система
-        p = self.page("system", "Система")
+        p = self.page("system", _("Система"))
         grid = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, max_children_per_line=3,
                            column_spacing=10, row_spacing=10, homogeneous=True)
         term = s["terminal"]
         tools = [
-            ("Звук", ["pavucontrol"]),
-            ("Сеть (Wi-Fi)", [term, "--class", "float", "-e", "impala"]),
+            (_("Звук"), ["pavucontrol"]),
+            (_("Сеть (Wi-Fi)"), [term, "--class", "float", "-e", "impala"]),
             ("Bluetooth", [term, "--class", "float", "-e", "bluetoothctl"]),
-            ("Обновить систему", [term, "--class", "float", "-e", "sh", "-c", "paru -Syu; read -p 'Enter — закрыть'"]),
-            ("Папка dotfiles", [s["files"], os.path.join(HOME, "dotfiles")]),
-            ("Перечитать Hyprland", ["hyprctl", "reload"]),
+            (_("Обновить систему"), [term, "--class", "float", "-e", "sh", "-c", _("paru -Syu; read -p 'Enter — закрыть'")]),
+            (_("Папка dotfiles"), [s["files"], os.path.join(HOME, "dotfiles")]),
+            (_("Перечитать Hyprland"), ["hyprctl", "reload"]),
         ]
         for label, cmd in tools:
             needed = "bluetoothctl" if "bluetoothctl" in cmd else ("impala" if "impala" in cmd else cmd[0])
@@ -384,9 +481,9 @@ class SettingsWindow(Gtk.ApplicationWindow):
         bar.add_css_class("footer")
         self.status = Gtk.Label(label="", xalign=0, hexpand=True)
         self.status.add_css_class("hint")
-        reset = Gtk.Button(label="По умолчанию")
+        reset = Gtk.Button(label=_("По умолчанию"))
         reset.connect("clicked", self.on_reset)
-        apply = Gtk.Button(label="Применить")
+        apply = Gtk.Button(label=_("Применить"))
         apply.add_css_class("apply")
         apply.connect("clicked", self.on_apply)
         bar.append(self.status)
@@ -413,6 +510,7 @@ class SettingsWindow(Gtk.ApplicationWindow):
         for k in ("terminal", "browser", "files"):
             s[k] = w[k].get_text().strip() or DEFAULTS[k]
         s["wallpaper"] = dd_value(w["wallpaper"])
+        s["lang"] = dd_value(w["lang"])
         s["canvas"] = {k: round(w[k].get_value(), 2) for k in ("spread", "shrink", "pad", "friction")}
         s["idle"] = {k: int(w[k].get_value()) for k in ("lock", "screen_off", "suspend")}
         return s
@@ -423,7 +521,7 @@ class SettingsWindow(Gtk.ApplicationWindow):
         try:
             write_files(new)
         except OSError as e:
-            self.status.set_text(f"Ошибка записи: {e}")
+            self.status.set_text(_("Ошибка записи: ") + str(e))
             return
         subprocess.run(["hyprctl", "reload"], capture_output=True)
         if new["idle"] != old["idle"]:
@@ -431,14 +529,20 @@ class SettingsWindow(Gtk.ApplicationWindow):
         if new["wallpaper"] != old["wallpaper"]:
             spawn("uwsm", "app", "--", os.path.join(SCRIPTS, "wallpaper"))
         self.s = new
+        if new["lang"] != old["lang"]:
+            spawn("uwsm", "app", "--", os.path.join(SCRIPTS, "bar"))
+            global LANG
+            LANG = detect_lang()
+            self.rebuild()
+            return
         errors = subprocess.run(["hyprctl", "configerrors"], capture_output=True, text=True).stdout.strip()
-        self.status.set_text("Ошибка в настройках — см. уведомление Hyprland" if errors else "Применено")
+        self.status.set_text(_("Ошибка в настройках — см. уведомление Hyprland") if errors else _("Применено"))
         GLib.timeout_add_seconds(4, lambda: self.status.set_text("") or False)
 
     def on_reset(self, _btn):
-        dialog = Gtk.AlertDialog(message="Сбросить все настройки?",
-                                 detail="Будут восстановлены значения по умолчанию.",
-                                 buttons=["Отмена", "Сбросить"], cancel_button=0, default_button=0)
+        dialog = Gtk.AlertDialog(message=_("Сбросить все настройки?"),
+                                 detail=_("Будут восстановлены значения по умолчанию."),
+                                 buttons=[_("Отмена"), _("Сбросить")], cancel_button=0, default_button=0)
         dialog.choose(self, None, self._reset_done)
 
     def _reset_done(self, dialog, result):
@@ -447,7 +551,7 @@ class SettingsWindow(Gtk.ApplicationWindow):
                 return
         except GLib.Error:
             return
-        for name in ("settings.json", "settings.lua", "hypridle.conf", "wallpaper"):
+        for name in ("settings.json", "settings.lua", "hypridle.conf", "wallpaper", "lang"):
             try:
                 os.remove(os.path.join(LOCAL, name))
             except FileNotFoundError:
@@ -455,9 +559,16 @@ class SettingsWindow(Gtk.ApplicationWindow):
         subprocess.run(["hyprctl", "reload"], capture_output=True)
         spawn("uwsm", "app", "--", os.path.join(SCRIPTS, "idle"))
         spawn("uwsm", "app", "--", os.path.join(SCRIPTS, "wallpaper"))
+        spawn("uwsm", "app", "--", os.path.join(SCRIPTS, "bar"))
+        global LANG
+        LANG = detect_lang()
+        self.rebuild()
+
+    def rebuild(self):
+        """Пересоздать окно (после смены языка или сброса)."""
         app = self.get_application()
         self.destroy()
-        app.activate()
+        SettingsWindow(app).present()
 
 
 class App(Gtk.Application):

@@ -70,7 +70,7 @@ end
 
 hl.on("hyprland.start", function()
     hl.exec_cmd("uwsm app -- " .. scripts .. "/wallpaper")
-    hl.exec_cmd("uwsm app -- waybar")
+    hl.exec_cmd("uwsm app -- " .. scripts .. "/bar")
     hl.exec_cmd("uwsm app -- mako")
     hl.exec_cmd("uwsm app -- " .. scripts .. "/idle")
     hl.exec_cmd("uwsm app -- wl-paste --type text --watch cliphist store")

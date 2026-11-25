@@ -20,26 +20,30 @@ for arg in "$@"; do
     case "$arg" in
         --links-only) LINKS_ONLY=1 ;;
         --no-nvidia)  NO_NVIDIA=1 ;;
-        -h|--help)    printf '%s\n' "Флаги: --links-only, --no-nvidia"; exit 0 ;;
-        *) echo "Неизвестный флаг: $arg" >&2; exit 1 ;;
+        -h|--help)    printf '%s\n' "Flags: --links-only, --no-nvidia"; exit 0 ;;
+        *) echo "Unknown flag / неизвестный флаг: $arg" >&2; exit 1 ;;
     esac
 done
+
+# Язык сообщений по локали: t "english" "русский"
+case "${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}" in ru*) UI_RU=1 ;; *) UI_RU=0 ;; esac
+t() { if ((UI_RU)); then printf '%s' "$2"; else printf '%s' "$1"; fi; }
 
 msg()  { printf '\033[1;37m::\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m!!\033[0m %s\n' "$*" >&2; }
 die()  { printf '\033[1;31mxx\033[0m %s\n' "$*" >&2; exit 1; }
 
-trap 'die "Ошибка в строке $LINENO: $BASH_COMMAND"' ERR
+trap 'die "$(t "Error at line $LINENO: $BASH_COMMAND" "Ошибка в строке $LINENO: $BASH_COMMAND")"' ERR
 
-[[ $EUID -ne 0 ]] || die "Запускай от обычного пользователя, не от root (sudo спросится сам)."
-command -v pacman >/dev/null || die "Это не Arch Linux (нет pacman)."
+[[ $EUID -ne 0 ]] || die "$(t "Run as a regular user, not root (sudo will ask when needed)." "Запускай от обычного пользователя, не от root (sudo спросится сам).")"
+command -v pacman >/dev/null || die "$(t "This is not Arch Linux (pacman not found)." "Это не Arch Linux (нет pacman).")"
 
 # ---------------------------------------------------------------------------
 # Бутстрап: если скрипт запущен не из репозитория (через curl) — клонируем его
 # ---------------------------------------------------------------------------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || true)"
 if [[ ! -f "$SCRIPT_DIR/packages/pacman.txt" ]]; then
-    msg "Клонирую dotfiles в $DOTFILES_DIR"
+    msg "$(t "Cloning dotfiles into $DOTFILES_DIR" "Клонирую dotfiles в $DOTFILES_DIR")"
     command -v git >/dev/null || sudo pacman -Sy --needed --noconfirm git
     if [[ -d "$DOTFILES_DIR/.git" ]]; then
         git -C "$DOTFILES_DIR" pull --ff-only
@@ -59,7 +63,7 @@ remove_if_installed() {
     local p found=()
     for p in "$@"; do installed "$p" && found+=("$p"); done
     if ((${#found[@]})); then
-        warn "Удаляю конфликтующие пакеты: ${found[*]}"
+        warn "$(t "Removing conflicting packages: ${found[*]}" "Удаляю конфликтующие пакеты: ${found[*]}")"
         sudo pacman -Rdd --noconfirm "${found[@]}"
     fi
 }
@@ -74,7 +78,7 @@ keep_sudo_alive() {
 
 install_paru() {
     command -v paru >/dev/null && return 0
-    msg "Устанавливаю paru (AUR-хелпер)"
+    msg "$(t "Installing paru (AUR helper)" "Устанавливаю paru (AUR-хелпер)")"
     sudo pacman -S --needed --noconfirm base-devel git
     local tmp; tmp="$(mktemp -d)"
     git clone --depth 1 https://aur.archlinux.org/paru-bin.git "$tmp/paru-bin"
@@ -86,19 +90,19 @@ install_packages() {
     # pulseaudio конфликтует с pipewire-pulse
     remove_if_installed pulseaudio pulseaudio-bluetooth pulseaudio-alsa
 
-    msg "Обновляю систему и ставлю пакеты из репозиториев"
+    msg "$(t "Updating the system and installing repository packages" "Обновляю систему и ставлю пакеты из репозиториев")"
     mapfile -t pkgs < <(read_list "$DOTFILES_DIR/packages/pacman.txt")
     sudo pacman -Syu --needed --noconfirm "${pkgs[@]}"
 
     install_paru
     mapfile -t aur < <(read_list "$DOTFILES_DIR/packages/aur.txt")
     if ((${#aur[@]})); then
-        msg "Ставлю пакеты из AUR"
+        msg "$(t "Installing AUR packages" "Ставлю пакеты из AUR")"
         paru -S --needed --noconfirm --skipreview "${aur[@]}"
     fi
 
     if compgen -G "/sys/class/bluetooth/*" >/dev/null; then
-        msg "Найден Bluetooth — ставлю bluez"
+        msg "$(t "Bluetooth found — installing bluez" "Найден Bluetooth — ставлю bluez")"
         sudo pacman -S --needed --noconfirm bluez bluez-utils
         sudo systemctl enable bluetooth.service
     fi
@@ -112,7 +116,7 @@ setup_nvidia() {
     local gpu
     gpu="$(lspci | grep -Ei 'vga|3d|display' | grep -i nvidia || true)"
     [[ -n $gpu ]] || return 0
-    msg "Найдена видеокарта NVIDIA: ${gpu#*: }"
+    msg "$(t "NVIDIA GPU found: ${gpu#*: }" "Найдена видеокарта NVIDIA: ${gpu#*: }")"
 
     local changed=0 headers=() k
     for k in linux linux-lts linux-zen linux-hardened; do
@@ -122,7 +126,7 @@ setup_nvidia() {
 
     if grep -qE '\b(GM|GP|GV)[0-9]{3}' <<<"$gpu"; then
         if ! installed nvidia-580xx-utils; then
-            msg "Старая архитектура — ставлю nvidia-580xx из AUR"
+            msg "$(t "Legacy architecture — installing nvidia-580xx from AUR" "Старая архитектура — ставлю nvidia-580xx из AUR")"
             local had_lib32=0
             installed lib32-nvidia-utils && had_lib32=1
             # Драйверы из репозиториев не поддерживают эту карту и конфликтуют с 580xx
@@ -185,14 +189,14 @@ link() {
         local rel="${dst#"$HOME"/}"
         mkdir -p "$BACKUP_DIR/$(dirname "$rel")"
         mv "$dst" "$BACKUP_DIR/$rel"
-        warn "Бэкап: ~/$rel -> $BACKUP_DIR/$rel"
+        warn "$(t "Backup" "Бэкап"): ~/$rel -> $BACKUP_DIR/$rel"
     fi
     mkdir -p "$(dirname "$dst")"
     ln -s "$src" "$dst"
 }
 
 link_configs() {
-    msg "Связываю конфиги"
+    msg "$(t "Linking configs" "Связываю конфиги")"
     local f
     for f in "$DOTFILES_DIR"/config/*; do
         link "$f" "$HOME/.config/$(basename "$f")"
@@ -216,7 +220,7 @@ link_configs() {
 setup_wallpaper() {
     [[ -f $WALL_DIR/drift.mp4 && -f $WALL_DIR/drift.png ]] && return 0
     if ! command -v ffmpeg >/dev/null || ! command -v python3 >/dev/null; then
-        warn "Нет ffmpeg/python3 — обои пропущены"
+        warn "$(t "ffmpeg/python3 missing — wallpaper skipped" "Нет ffmpeg/python3 — обои пропущены")"
         return 0
     fi
     local size="1920x1080"
@@ -224,7 +228,7 @@ setup_wallpaper() {
         size="$(hyprctl monitors | awk '/^\t[0-9]+x[0-9]+@/ {split($1, a, "@"); print a[1]; exit}')"
         [[ $size =~ ^[0-9]+x[0-9]+$ ]] || size="1920x1080"
     fi
-    msg "Генерирую анимированные обои ($size)"
+    msg "$(t "Generating animated wallpaper ($size)" "Генерирую анимированные обои ($size)")"
     python3 -I "$DOTFILES_DIR/extra/wallpaper/generate.py" "$WALL_DIR" --size "$size"
 }
 
@@ -232,7 +236,7 @@ setup_wallpaper() {
 # SDDM: монохромная тема в стиле окружения
 # ---------------------------------------------------------------------------
 setup_sddm() {
-    msg "Настраиваю экран входа SDDM"
+    msg "$(t "Setting up the SDDM login screen" "Настраиваю экран входа SDDM")"
     local theme=/usr/share/sddm/themes/mono
     sudo rm -rf "$theme"
     sudo cp -r "$DOTFILES_DIR/extra/sddm/mono" "$theme"
@@ -253,7 +257,7 @@ setup_sddm() {
 # Темы, приложения по умолчанию, оболочка, сервисы
 # ---------------------------------------------------------------------------
 apply_theme() {
-    msg "Применяю тёмную тему"
+    msg "$(t "Applying the dark theme" "Применяю тёмную тему")"
     mkdir -p "$HOME/.config/qt6ct/colors"
     cp "$DOTFILES_DIR/extra/qt6ct/mono.conf" "$HOME/.config/qt6ct/colors/mono.conf"
     cat > "$HOME/.config/qt6ct/qt6ct.conf" <<EOF
@@ -284,13 +288,13 @@ setup_shell() {
     local current
     current="$(getent passwd "$USER" | cut -d: -f7)"
     if [[ $current != */zsh ]]; then
-        msg "Делаю zsh оболочкой по умолчанию"
+        msg "$(t "Setting zsh as the default shell" "Делаю zsh оболочкой по умолчанию")"
         sudo chsh -s /usr/bin/zsh "$USER"
     fi
 }
 
 setup_services() {
-    msg "Включаю пользовательские сервисы"
+    msg "$(t "Enabling user services" "Включаю пользовательские сервисы")"
     systemctl --user enable hyprpolkitagent.service 2>/dev/null || true
 }
 
@@ -316,9 +320,9 @@ if pgrep -x Hyprland >/dev/null && command -v hyprctl >/dev/null; then
     hyprctl reload >/dev/null 2>&1 || true
 fi
 
-msg "Готово."
+msg "$(t "Done." "Готово.")"
 if ((NEED_REBOOT)); then
-    warn "Перезагрузи компьютер, чтобы загрузился драйвер NVIDIA."
+    warn "$(t "Reboot to load the NVIDIA driver." "Перезагрузи компьютер, чтобы загрузился драйвер NVIDIA.")"
 else
-    msg "Перезайди в сессию (Super+Shift+Escape -> logout), чтобы всё применилось."
+    msg "$(t "Log out and back in (Super+Shift+Escape -> logout) to apply everything." "Перезайди в сессию (Super+Shift+Escape -> выход), чтобы всё применилось.")"
 fi

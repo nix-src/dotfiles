@@ -1,17 +1,21 @@
 #!/usr/bin/env bash
 # Меню питания (Super + Shift + Escape или кнопка ⏻ в панели)
-choice="$(printf '%s\n' \
-    '󰌾  lock' \
-    '󰒲  suspend' \
-    '󰜉  reboot' \
-    '󰐥  shutdown' \
-    '󰍃  logout' \
-    | fuzzel --dmenu --prompt 'power › ' --lines 5 --width 22)" || exit 0
+if [[ "$("$HOME/.config/hypr/scripts/lang")" == ru ]]; then
+    labels=("блокировка" "сон" "перезагрузка" "выключение" "выход")
+    prompt="питание › "
+else
+    labels=("lock" "suspend" "reboot" "shutdown" "logout")
+    prompt="power › "
+fi
+icons=($'\U000f033e' $'\U000f04b2' $'\U000f0709' $'\U000f0425' $'\U000f0343')
 
-case "${choice##* }" in
-    lock)     loginctl lock-session ;;
-    suspend)  systemctl suspend ;;
-    reboot)   systemctl reboot ;;
-    shutdown) systemctl poweroff ;;
-    logout)   uwsm stop ;;
+idx="$(for i in "${!labels[@]}"; do printf '%s  %s\n' "${icons[$i]}" "${labels[$i]}"; done \
+    | fuzzel --dmenu --index --prompt "$prompt" --lines 5 --width 24)" || exit 0
+
+case "$idx" in
+    0) loginctl lock-session ;;
+    1) systemctl suspend ;;
+    2) systemctl reboot ;;
+    3) systemctl poweroff ;;
+    4) uwsm stop ;;
 esac

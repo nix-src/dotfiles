@@ -1,118 +1,124 @@
 # dotfiles
 
-Минималистичное тёмное окружение для Arch Linux + Hyprland (0.57+, Lua-конфиг):
-монохром, без скруглений, blur и теней.
+**English** · [Русский](README.ru.md)
 
-## Установка на новую систему
+A minimal dark environment for Arch Linux + Hyprland (0.57+, Lua config):
+monochrome, no rounded corners, no blur, no shadows.
 
-На свежем Arch (с пользователем в группе `wheel` и рабочей сетью):
+## Install on a new system
+
+On a fresh Arch install (user in the `wheel` group, working network):
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/nix-src/dotfiles/main/install.sh)
 ```
 
-Скрипт клонирует репозиторий в `~/dotfiles` и:
+The script clones the repo into `~/dotfiles` and:
 
-1. обновляет систему и ставит пакеты из `packages/pacman.txt` (+ `packages/aur.txt` через paru);
-2. если есть NVIDIA — ставит драйвер (GTX 9xx/10xx → `nvidia-580xx` из AUR, новее → `nvidia-open`),
-   настраивает раннюю загрузку модулей и пересобирает initramfs;
-3. ставит Bluetooth, если он есть;
-4. делает симлинки `config/*` → `~/.config/*`, `home/.*` → `~/` (старые файлы — в `~/.dotfiles-backup/`);
-5. генерирует анимированные обои (`extra/wallpaper/generate.py`) под разрешение монитора;
-6. ставит тему SDDM `mono` и включает SDDM, если другого экрана входа нет;
-7. включает тёмную тему GTK/Qt, делает zsh оболочкой по умолчанию.
+1. updates the system and installs packages from `packages/pacman.txt` (+ `packages/aur.txt` via paru);
+2. on NVIDIA, installs the driver (GTX 9xx/10xx → `nvidia-580xx` from AUR, newer → `nvidia-open`),
+   sets up early module loading and rebuilds the initramfs;
+3. installs Bluetooth support if the hardware is present;
+4. symlinks `config/*` → `~/.config/*`, `home/.*` → `~/` (existing files go to `~/.dotfiles-backup/`);
+5. generates the animated wallpaper (`extra/wallpaper/generate.py`) for your monitor resolution;
+6. installs the `mono` SDDM theme and enables SDDM if no other display manager is set up;
+7. applies the dark GTK/Qt theme and makes zsh the default shell.
 
-Конфликтующие пакеты (pulseaudio, драйверы NVIDIA из репозиториев для старых карт)
-удаляются автоматически, так что скрипт не останавливается на вопросах. Пароль sudo
-спрашивается один раз в начале.
+Conflicting packages (pulseaudio, repository NVIDIA drivers on legacy cards) are removed
+automatically, so the script never stops on prompts. sudo asks for the password once at the start.
 
-Флаги: `--links-only` (только конфиги), `--no-nvidia`.
+Flags: `--links-only` (configs only), `--no-nvidia`.
 
-## Состав
+## What's inside
 
-| Что | Чем |
+| Role | Tool |
 |---|---|
-| Композитор | Hyprland (через uwsm) |
-| Панель | waybar |
-| Обои | mpvpaper + сгенерированное видео (пауза, когда закрыты окнами) |
-| Экран входа | SDDM, тема `mono` |
-| Лаунчер / меню | fuzzel |
-| Уведомления | mako |
-| Блокировка / idle | hyprlock / hypridle (блок через 10 мин, экран off через 15) |
-| Терминал / shell | kitty / zsh + starship |
-| Редактор | neovim (без плагинов, тема `quiet`) |
-| Файлы | thunar |
-| Сеть / звук | iwd + impala / pipewire + pavucontrol |
-| Буфер / скриншоты | cliphist / grim + slurp |
+| Compositor | Hyprland (via uwsm) |
+| Bar | waybar |
+| Wallpaper | mpvpaper + generated video (paused when covered by windows) |
+| Login screen | SDDM, `mono` theme |
+| Launcher / menus | fuzzel |
+| Notifications | mako |
+| Lock / idle | hyprlock / hypridle (lock after 10 min, screen off after 15) |
+| Terminal / shell | kitty / zsh + starship |
+| Editor | neovim (no plugins, `quiet` colorscheme) |
+| Files | thunar |
+| Network / audio | iwd + impala / pipewire + pavucontrol |
+| Media | mpris module in the bar: track from any player, click to pause, right click for next |
+| Clipboard / screenshots | cliphist / grim + slurp |
 
-## Горячие клавиши
+## Keybindings
 
-| Клавиши | Действие |
+| Keys | Action |
 |---|---|
-| `Super + Enter` | терминал |
-| `Super + D` | запуск приложений |
-| `Super + E` / `Super + B` | файлы / браузер |
-| `Super + I` | окно настроек |
-| `Super + Q` | закрыть окно |
-| `Super + F` | тайлинг ↔ бесконечный холст |
-| `Super + Shift + F` / `Super + M` | полный экран / развернуть |
-| `Super + V` | плавающее окно |
-| `Super + T` | сменить направление разделения |
-| `Super + ←↓↑→` или `H J K L` | фокус |
-| `Super + Shift + стрелки/HJKL` | переместить окно |
-| `Super + Ctrl + стрелки/HJKL` | изменить размер |
-| `Super + 1..0` / `Super + Shift + 1..0` | рабочий стол / перенести окно |
-| `Super + Tab` | предыдущий рабочий стол |
+| `Super + Enter` | terminal |
+| `Super + D` | app launcher |
+| `Super + E` / `Super + B` | files / browser |
+| `Super + I` | settings window |
+| `Super + Q` | close window |
+| `Super + F` | tiling ↔ infinite canvas |
+| `Super + Shift + F` / `Super + M` | fullscreen / maximize |
+| `Super + V` | toggle floating |
+| `Super + T` | toggle split direction |
+| `Super + ←↓↑→` or `H J K L` | move focus |
+| `Super + Shift + arrows/HJKL` | move window |
+| `Super + Ctrl + arrows/HJKL` | resize window |
+| `Super + 1..0` / `Super + Shift + 1..0` | switch workspace / move window to workspace |
+| `Super + Tab` | previous workspace |
 | `Super + S` / `Super + Shift + S` | scratchpad |
-| ЛКМ по пустому месту (тянуть) | двигать холст (с инерцией) |
-| `Super + средняя кнопка` (тянуть) | двигать холст, даже над окном |
-| колесо по пустому месту (`Shift` — по горизонтали) | прокрутка холста |
-| `Super + Alt + стрелки/HJKL` | плавный сдвиг холста |
-| `Super + Alt + C` | навести камеру на активное окно |
-| `Super + C` | история буфера обмена |
-| `Super + N` | скрыть уведомления |
-| `Print` / `Shift + Print` | скриншот области / экрана |
-| `Super + Print` | пипетка цвета |
-| `Super + Escape` | заблокировать |
-| `Super + Shift + Escape` | меню питания (то же — кнопка ⏻ в панели) |
-| `Super + Shift + R` | перечитать конфиг |
-| `Alt + Shift` | раскладка us/ru |
+| drag empty space with LMB | pan the canvas (with inertia) |
+| `Super + middle button` (drag) | pan the canvas, even over a window |
+| wheel over empty space (`Shift` for horizontal) | scroll the canvas |
+| `Super + Alt + arrows/HJKL` | smooth canvas pan |
+| `Super + Alt + C` | center the camera on the active window |
+| `Super + C` | clipboard history |
+| `Super + N` | dismiss notifications |
+| `Print` / `Shift + Print` | screenshot area / screen |
+| `Super + Print` | color picker |
+| `Super + Escape` | lock |
+| `Super + Shift + Escape` | power menu (also the ⏻ button in the bar) |
+| `Super + Shift + R` | reload config |
+| `Alt + Shift` | switch keyboard layout |
 
-## Бесконечный холст
+## Infinite canvas
 
-`Super + F` переключает текущий рабочий стол между тайлингом и холстом. При входе
-окна становятся плавающими, слегка уменьшаются и разъезжаются от центра, освобождая
-пространство. Холст перетаскивается мышью за любое пустое место и после отпускания
-докатывается по инерции; обои при этом остаются на месте. Новые окна открываются
-в центре экрана. Пока холст активен, в панели горит индикатор `∞ infinite`. Повторное
-`Super + F` возвращает окна в тайлинг. Логика — в `config/hypr/canvas.lua`
-(параметры настраиваются в окне настроек).
+`Super + F` switches the current workspace between tiling and a canvas. On entering, windows
+become floating, shrink slightly and spread out from the center. Drag any empty spot to pan
+the canvas; on release it keeps gliding with inertia while the wallpaper stays put. New windows
+open in the middle of the screen. While the canvas is active the bar shows `∞ infinite`.
+Press `Super + F` again to tile the windows back. Logic lives in `config/hypr/canvas.lua`;
+parameters are adjustable in the settings window.
 
-Холст ограничен: экран не может уехать дальше крайних окон плюс запас (по умолчанию
-35% экрана). Чем больше окон и чем шире они разложены, тем больше поле; упираясь
-в границу, холст гасит инерцию.
+The canvas is bounded: the view can't move further than the outermost windows plus a margin
+(35% of the screen by default). More windows spread wider mean a larger field; hitting the edge
+stops the inertia.
 
-## Настройки
+## Settings
 
-`Super + I` или шестерёнка в панели открывают окно настроек (GTK4):
+`Super + I` or the gear in the bar opens the settings window (GTK4):
 
-| Раздел | Что настраивается |
+| Section | What you can change |
 |---|---|
-| Экран | разрешение и частота, масштаб, позиция каждого монитора |
-| Клавиатура и мышь | раскладки, переключение раскладки, повтор клавиш, чувствительность, ускорение, прокрутка |
-| Внешний вид | отступы, рамка, анимации, вращающаяся рамка, затемнение, режим обоев |
-| Бесконечный холст | разъезд и масштаб окон, запас за краем, инерция |
-| Питание | блокировка, выключение экрана и сон по бездействию |
-| Приложения | терминал, браузер, файловый менеджер |
-| Система | звук, Wi-Fi, Bluetooth, обновление системы, папка dotfiles |
+| Display | resolution and refresh rate, scale, position of each monitor |
+| Keyboard and mouse | layouts, layout switch, key repeat, sensitivity, acceleration, scrolling |
+| Appearance | gaps, border, animations, rotating border, dimming, wallpaper mode, interface language |
+| Infinite canvas | window spread and scale, edge margin, inertia |
+| Power | lock, screen off and suspend on idle |
+| Applications | terminal, browser, file manager |
+| System | sound, Wi-Fi, Bluetooth, system update, dotfiles folder |
 
-Значения хранятся в `~/.config/dotfiles-local/` — эта папка не в репозитории, у каждой
-машины свои настройки. Кнопка «По умолчанию» удаляет её и возвращает значения из
-репозитория.
+Values are stored in `~/.config/dotfiles-local/`, outside the repo, so every machine keeps its own.
+The "Defaults" button deletes it and restores the repository defaults.
 
-## Изменение
+## Language
 
-Конфиги — симлинки, так что правки в `~/.config/...` сразу попадают в репозиторий:
+The interface (bar, power menu, notifications, settings window, login screen, installer) is
+available in English and Russian. The language follows the system locale (`LANG`) and can be
+set manually in the settings window (Appearance → Interface language).
+
+## Making changes
+
+Configs are symlinks, so edits in `~/.config/...` land in the repo right away:
 
 ```bash
 cd ~/dotfiles && git add -A && git commit -m "..." && git push
