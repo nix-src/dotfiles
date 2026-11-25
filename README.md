@@ -44,7 +44,7 @@ Flags: `--links-only` (configs only), `--no-nvidia`.
 | Editor | neovim (no plugins, `quiet` colorscheme) |
 | Files | thunar |
 | Network / audio | iwd + impala / pipewire + pavucontrol |
-| Media | mpris module in the bar: track from any player, click to pause, right click for next |
+| Media | track from any MPRIS player in the bar; click opens the mini player (cover, seek, controls), right click play/pause, middle click next |
 | Clipboard / screenshots | cliphist / grim + slurp |
 
 ## Keybindings

@@ -45,7 +45,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/nix-src/dotfiles/main/instal
 | Редактор | neovim (без плагинов, тема `quiet`) |
 | Файлы | thunar |
 | Сеть / звук | iwd + impala / pipewire + pavucontrol |
-| Медиа | модуль mpris в панели: трек из любого плеера, клик — пауза, ПКМ — следующий |
+| Медиа | трек из любого MPRIS-плеера в панели; клик — мини-плеер (обложка, перемотка, кнопки), ПКМ — пауза, средняя — следующий |
 | Буфер / скриншоты | cliphist / grim + slurp |
 
 ## Горячие клавиши

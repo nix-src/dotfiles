@@ -9,7 +9,7 @@
 
     "modules-left": ["hyprland/workspaces", "custom/canvas"],
     "modules-center": ["clock"],
-    "modules-right": ["mpris", "tray", "hyprland/language", "cpu", "memory", "disk", "pulseaudio", "battery", "custom/settings", "custom/power"],
+    "modules-right": ["custom/media", "tray", "hyprland/language", "cpu", "memory", "disk", "pulseaudio", "battery", "custom/settings", "custom/power"],
 
     "hyprland/workspaces": {
         "format": "{id}",
@@ -45,15 +45,13 @@
         }
     },
 
-    "mpris": {
-        "dynamic-order": ["artist", "title"],
-        "dynamic-len": 42,
-        "dynamic-separator": " — ",
-        "status-icons": { "playing": "󰐊", "paused": "󰏤" },
-        "format": "{status_icon}  {dynamic}",
-        "format-paused": "{status_icon}  {dynamic}",
-        "format-stopped": "",
-        "tooltip-format": "{player}: {dynamic}"
+    "custom/media": {
+        "exec": "~/.config/hypr/scripts/media",
+        "return-type": "json",
+        "escape": false,
+        "on-click": "~/.config/hypr/scripts/player",
+        "on-click-right": "playerctl play-pause",
+        "on-click-middle": "playerctl next"
     },
 
     "cpu": {

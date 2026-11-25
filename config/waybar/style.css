@@ -56,13 +56,22 @@ window#waybar {
     padding: 0 12px;
 }
 
-#mpris {
+#custom-media {
     padding: 0 14px;
-    color: #a0a0a0;
+    color: #c8c8c8;
 }
 
-#mpris.paused {
+#custom-media.paused {
+    color: #6b6b6b;
+}
+
+#custom-media.idle {
     color: #4f4f4f;
+}
+
+#custom-media:hover {
+    background: #1f1f1f;
+    color: #ededed;
 }
 
 #custom-settings,

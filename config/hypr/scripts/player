@@ -1,0 +1,294 @@
+#!/usr/bin/env python3
+"""Мини-плеер (клик по треку в панели).
+
+Показывает обложку, название, исполнителя, прогресс с перемоткой и кнопки
+управления для активного MPRIS-плеера (через playerctl). Повторный запуск,
+Escape или клик мимо окна — закрывают его.
+"""
+import hashlib
+import os
+import subprocess
+import sys
+import threading
+import urllib.request
+
+import gi
+
+gi.require_version("Gtk", "4.0")
+gi.require_version("Gdk", "4.0")
+gi.require_version("GdkPixbuf", "2.0")
+from gi.repository import Gdk, GdkPixbuf, Gio, GLib, Gtk, Pango  # noqa: E402
+
+PREV, PLAY, PAUSE, NEXT, NOTE = "\U000f04ae", "\U000f040a", "\U000f03e4", "\U000f04ad", "\U000f075a"
+SEP = "\x1f"
+FIELDS = ["status", "artist", "title", "album", "mpris:artUrl", "position", "mpris:length", "playerName"]
+FMT = SEP.join("{{" + f + "}}" for f in FIELDS)
+COVER = 110
+CACHE = os.path.join(os.path.expanduser("~/.cache"), "dotfiles", "covers")
+
+
+def detect_lang():
+    try:
+        out = subprocess.run([os.path.expanduser("~/.config/hypr/scripts/lang")],
+                             capture_output=True, text=True, timeout=3)
+        return out.stdout.strip()
+    except (OSError, subprocess.TimeoutExpired):
+        return "en"
+
+
+RU = detect_lang() == "ru"
+NOTHING = "Ничего не играет" if RU else "Nothing playing"
+HINT = "Включи музыку в браузере или плеере" if RU else "Start music in a browser or player"
+
+CSS = """
+window { background: #0f0f0f; border: 1px solid #2a2a2a; }
+.cover { background: #161616; }
+.cover-icon { font-size: 34px; color: #3a3a3a; }
+.title { font-size: 14px; font-weight: bold; color: #ededed; }
+.artist { color: #a0a0a0; }
+.player { color: #4f4f4f; font-size: 11px; }
+.time { color: #6b6b6b; font-size: 11px; font-family: monospace; }
+button.ctl { font-size: 18px; min-width: 44px; min-height: 34px; padding: 0;
+             background: transparent; border: none; color: #c8c8c8; }
+button.ctl:hover { background: #1f1f1f; color: #ffffff; }
+button.main { background: #c8c8c8; color: #0b0b0b; }
+button.main:hover { background: #ededed; color: #0b0b0b; }
+scale trough { min-height: 3px; background: #262626; }
+scale highlight { background: #c8c8c8; }
+scale slider { min-width: 10px; min-height: 10px; background: #ededed; margin: -4px; }
+"""
+
+
+def playerctl(*args):
+    try:
+        return subprocess.run(["playerctl", *args], capture_output=True, text=True, timeout=2)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+
+def query():
+    out = playerctl("metadata", "--format", FMT)
+    if not out or out.returncode != 0:
+        return None
+    parts = out.stdout.rstrip("\n").split(SEP)
+    if len(parts) != len(FIELDS):
+        return None
+    d = dict(zip(FIELDS, parts))
+    if d["status"] == "Stopped" or not d["title"]:
+        return None
+    for k in ("position", "mpris:length"):
+        try:
+            d[k] = int(d[k]) / 1_000_000
+        except ValueError:
+            d[k] = 0.0
+    return d
+
+
+def fmt_time(sec):
+    sec = int(max(0, sec))
+    return f"{sec // 60}:{sec % 60:02d}"
+
+
+class Player(Gtk.ApplicationWindow):
+    def __init__(self, app):
+        super().__init__(application=app, title="Player")
+        self.set_default_size(420, 150)
+        self.set_resizable(False)
+        self.dragging = False
+        self.art_url = None
+        self.was_active = False
+
+        root = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14)
+        for side in ("start", "end", "top", "bottom"):
+            getattr(root, f"set_margin_{side}")(14)
+
+        # обложка
+        self.cover = Gtk.Stack()
+        self.cover.add_css_class("cover")
+        self.cover.set_size_request(COVER, COVER)
+        self.cover.set_valign(Gtk.Align.CENTER)
+        self.cover.set_halign(Gtk.Align.START)
+        self.cover.set_hexpand(False)
+        icon = Gtk.Label(label=NOTE)
+        icon.add_css_class("cover-icon")
+        self.cover.add_named(icon, "icon")
+        self.picture = Gtk.Image(pixel_size=COVER)
+        self.cover.add_named(self.picture, "art")
+        root.append(self.cover)
+
+        # текст, прогресс, кнопки
+        col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4, hexpand=True)
+        self.title = Gtk.Label(xalign=0, ellipsize=Pango.EllipsizeMode.END)
+        self.title.add_css_class("title")
+        self.artist = Gtk.Label(xalign=0, ellipsize=Pango.EllipsizeMode.END)
+        self.artist.add_css_class("artist")
+        self.player = Gtk.Label(xalign=0, ellipsize=Pango.EllipsizeMode.END)
+        self.player.add_css_class("player")
+        for w in (self.title, self.artist, self.player):
+            col.append(w)
+
+        self.scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0, 1, 1)
+        self.scale.set_draw_value(False)
+        self.scale.connect("change-value", self.on_seek)
+        drag = Gtk.GestureClick()
+        drag.connect("pressed", lambda *_: setattr(self, "dragging", True))
+        drag.connect("released", lambda *_: setattr(self, "dragging", False))
+        self.scale.add_controller(drag)
+        col.append(self.scale)
+
+        times = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        self.pos_l = Gtk.Label(xalign=0, hexpand=True)
+        self.len_l = Gtk.Label(xalign=1)
+        for w in (self.pos_l, self.len_l):
+            w.add_css_class("time")
+            times.append(w)
+        col.append(times)
+
+        ctl = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6, halign=Gtk.Align.CENTER)
+        self.b_prev = self.button(PREV, "previous")
+        self.b_play = self.button(PLAY, "play-pause")
+        self.b_play.add_css_class("main")
+        self.b_next = self.button(NEXT, "next")
+        for b in (self.b_prev, self.b_play, self.b_next):
+            ctl.append(b)
+        col.append(ctl)
+        root.append(col)
+        self.set_child(root)
+
+        keys = Gtk.EventControllerKey()
+        keys.connect("key-pressed", self.on_key)
+        self.add_controller(keys)
+        self.connect("notify::is-active", self.on_active)
+
+        self.refresh()
+        GLib.timeout_add(500, self.refresh)
+
+    def button(self, icon, action):
+        b = Gtk.Button(label=icon)
+        b.add_css_class("ctl")
+        b.connect("clicked", lambda _b: (playerctl(action), self.refresh()))
+        return b
+
+    # ----------------------------------------------------------- обновление
+    def refresh(self):
+        d = query()
+        if d is None:
+            self.title.set_text(NOTHING)
+            self.artist.set_text(HINT)
+            self.player.set_text("")
+            self.scale.set_range(0, 1)
+            self.scale.set_value(0)
+            self.pos_l.set_text("")
+            self.len_l.set_text("")
+            for b in (self.b_prev, self.b_play, self.b_next):
+                b.set_sensitive(False)
+            self.show_art(None)
+            return True
+
+        for b in (self.b_prev, self.b_play, self.b_next):
+            b.set_sensitive(True)
+        self.title.set_text(d["title"])
+        self.artist.set_text(" · ".join(x for x in (d["artist"], d["album"]) if x))
+        self.player.set_text(d["playerName"])
+        self.b_play.set_label(PAUSE if d["status"] == "Playing" else PLAY)
+        length = d["mpris:length"]
+        if length > 0:
+            self.scale.set_sensitive(True)
+            self.scale.set_range(0, length)
+            if not self.dragging:
+                self.scale.set_value(min(d["position"], length))
+            self.len_l.set_text(fmt_time(length))
+        else:
+            self.scale.set_sensitive(False)
+            self.len_l.set_text("")
+        self.pos_l.set_text(fmt_time(d["position"]))
+        self.show_art(d["mpris:artUrl"] or None)
+        return True
+
+    def on_seek(self, _scale, _scroll, value):
+        playerctl("position", f"{max(0, value):.2f}")
+        return False
+
+    # -------------------------------------------------------------- обложка
+    def show_art(self, url):
+        if url == self.art_url:
+            return
+        self.art_url = url
+        if not url:
+            self.cover.set_visible_child_name("icon")
+            return
+        if url.startswith("file://"):
+            self.set_art_file(GLib.filename_from_uri(url)[0], url)
+        elif url.startswith(("http://", "https://")):
+            threading.Thread(target=self.fetch_art, args=(url,), daemon=True).start()
+        else:
+            self.cover.set_visible_child_name("icon")
+
+    def fetch_art(self, url):
+        os.makedirs(CACHE, exist_ok=True)
+        path = os.path.join(CACHE, hashlib.sha1(url.encode()).hexdigest())
+        if not os.path.exists(path):
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": "mini-player"})
+                with urllib.request.urlopen(req, timeout=5) as r, open(path + ".part", "wb") as f:
+                    f.write(r.read(5_000_000))
+                os.replace(path + ".part", path)
+            except OSError:
+                return
+        GLib.idle_add(self.set_art_file, path, url)
+
+    def set_art_file(self, path, url):
+        if url != self.art_url:
+            return False
+        try:
+            # квадратная обрезка по центру и масштаб под размер обложки (с учётом HiDPI)
+            pb = GdkPixbuf.Pixbuf.new_from_file(path)
+            side = min(pb.get_width(), pb.get_height())
+            pb = pb.new_subpixbuf((pb.get_width() - side) // 2, (pb.get_height() - side) // 2, side, side)
+            px = COVER * max(1, self.get_scale_factor())
+            pb = pb.scale_simple(px, px, GdkPixbuf.InterpType.BILINEAR)
+            ok, png = pb.save_to_bufferv("png", [], [])
+            self.picture.set_from_paintable(Gdk.Texture.new_from_bytes(GLib.Bytes.new(png)))
+            self.cover.set_visible_child_name("art")
+        except GLib.Error:
+            self.cover.set_visible_child_name("icon")
+        return False
+
+    # -------------------------------------------------------------- закрытие
+    def on_key(self, _ctl, keyval, _code, _state):
+        if keyval == Gdk.KEY_Escape:
+            self.close()
+            return True
+        if keyval == Gdk.KEY_space:
+            playerctl("play-pause")
+            return True
+        return False
+
+    def on_active(self, *_):
+        if self.is_active():
+            self.was_active = True
+        elif self.was_active:
+            self.close()
+
+
+class App(Gtk.Application):
+    def __init__(self):
+        super().__init__(application_id="dotfiles.player", flags=Gio.ApplicationFlags.DEFAULT_FLAGS)
+
+    def do_startup(self):
+        Gtk.Application.do_startup(self)
+        css = Gtk.CssProvider()
+        css.load_from_string(CSS)
+        Gtk.StyleContext.add_provider_for_display(
+            Gdk.Display.get_default(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+
+    def do_activate(self):
+        win = self.get_active_window()
+        if win:          # повторный клик по модулю — закрыть
+            win.close()
+            return
+        Player(self).present()
+
+
+if __name__ == "__main__":
+    sys.exit(App().run(sys.argv))

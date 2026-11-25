@@ -282,6 +282,15 @@ hl.window_rule({
     center = true,
 })
 
+-- Мини-плеер: справа под панелью
+hl.window_rule({
+    name  = "mini-player",
+    match = { class = "^dotfiles\\.player$" },
+    float = true,
+    move  = "monitor_w-428 38",
+    pin   = true,
+})
+
 hl.window_rule({
     name  = "float-dialogs",
     match = { title = "^(Open File|Save File|Open Folder|Select a File|File Operation Progress|Confirm to replace files)(.*)$" },
