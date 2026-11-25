@@ -1,24 +1,35 @@
 -- Бесконечный холст для рабочего стола.
 --
---   Super + F                         тайлинг <-> холст (для текущего рабочего стола)
---   Super + средняя кнопка (тянуть)   двигать холст
---   Super + Alt + ЛКМ (тянуть)        двигать холст
---   Super + Alt + стрелки / HJKL      сдвинуть холст на 300px
---   Super + Alt + колесо              прокрутка холста (с Shift — по горизонтали)
---   Super + Alt + C                   центрировать холст на активном окне
+--   Super + F                        тайлинг <-> холст (текущий рабочий стол)
+--   ЛКМ по пустому месту (тянуть)    двигать холст, после отпускания — докатывается по инерции
+--   Super + средняя кнопка (тянуть)  двигать холст, даже если курсор над окном
+--   колесо по пустому месту          прокрутка холста (с Shift — по горизонтали)
+--   Super + Alt + стрелки / HJKL     плавный сдвиг холста
+--   Super + Alt + C                  плавно навести камеру на активное окно
 --
--- В режиме холста все окна плавающие и могут уходить за пределы экрана,
--- новые окна тоже открываются плавающими. Состояние переживает перезагрузку
--- конфига (хранится в $XDG_RUNTIME_DIR).
+-- При входе в режим холста окна становятся плавающими, чуть уменьшаются и
+-- «разъезжаются» от центра, освобождая пространство. Новые окна открываются
+-- в центре экрана. Состояние переживает перезагрузку конфига.
 
 local M = {}
+
+local SPREAD   = 1.35   -- во сколько раз растянуть расстояния от центра при входе
+local SHRINK   = 0.82   -- масштаб окон при входе
+local STEP     = 400    -- шаг клавиатурного сдвига, px
+local SCROLL   = 90     -- шаг прокрутки колесом, px
+local FRICTION = 0.94   -- затухание инерции за тик
+local TICK     = 8      -- период таймера, мс
 
 local runtime    = os.getenv("XDG_RUNTIME_DIR") or "/tmp"
 local state_file = runtime .. "/hypr-canvas"
 local bar_file   = runtime .. "/hypr-canvas-bar"
 
-local active = {}          -- [workspace id] = true
-local pan    = { timer = nil, x = 0, y = 0 }
+local active = {}   -- [workspace id] = true
+local pan = {
+    timer = nil, mode = nil,     -- nil | "drag" | "glide"
+    x = 0, y = 0, vx = 0, vy = 0,
+    idle = 0,
+}
 
 ------------------------------------------------------------------ состояние --
 
@@ -42,10 +53,9 @@ end
 -- Индикатор в waybar (модуль custom/canvas, сигнал 8)
 local function update_bar()
     local ws = hl.get_active_workspace()
-    local on = ws and ws.id and active[ws.id]
     local f = io.open(bar_file, "w")
     if f then
-        f:write(on and "canvas" or "")
+        f:write((ws and ws.id and active[ws.id]) and "canvas" or "")
         f:close()
     end
     hl.exec_cmd("pkill -RTMIN+8 waybar")
@@ -57,7 +67,7 @@ local function sel(w) return "address:" .. w.address end
 
 local function current()
     local ws = hl.get_active_workspace()
-    if not ws or ws.special or not ws.id then return nil end
+    if not ws or ws.special or not ws.id or not active[ws.id] then return nil end
     return ws
 end
 
@@ -69,6 +79,29 @@ local function windows(ws)
     return out
 end
 
+-- Рабочая область монитора без панелей
+local function usable(m)
+    local r = type(m.reserved) == "table" and m.reserved or {}
+    local top, bottom = r.top or 0, r.bottom or 0
+    local left, right = r.left or 0, r.right or 0
+    return m.x + left, m.y + top, m.width - left - right, m.height - top - bottom
+end
+
+local function over_empty_space()
+    local ws = current()
+    local c = hl.get_cursor_pos()
+    local m = hl.get_active_monitor()
+    if not ws or not c or not m then return false end
+    local ux, uy, uw, uh = usable(m)
+    if c.x < ux or c.y < uy or c.x > ux + uw or c.y > uy + uh then return false end
+    for _, w in ipairs(windows(ws)) do
+        if c.x >= w.at.x and c.x < w.at.x + w.size.x and c.y >= w.at.y and c.y < w.at.y + w.size.y then
+            return false
+        end
+    end
+    return true
+end
+
 local function shift(ws, dx, dy)
     if dx == 0 and dy == 0 then return end
     for _, w in ipairs(windows(ws)) do
@@ -78,11 +111,19 @@ local function shift(ws, dx, dy)
     end
 end
 
+local function set_move_anim(on)
+    if on then
+        hl.animation({ leaf = "windowsMove", enabled = true, speed = 4, bezier = "snap" })
+    else
+        hl.animation({ leaf = "windowsMove", enabled = false })
+    end
+end
+
 ----------------------------------------------------------------- переключение --
 
 function M.toggle()
-    local ws = current()
-    if not ws then return end
+    local ws = hl.get_active_workspace()
+    if not ws or ws.special or not ws.id then return end
 
     if active[ws.id] then
         active[ws.id] = nil
@@ -93,14 +134,29 @@ function M.toggle()
         end
     else
         active[ws.id] = true
-        -- Фиксируем текущую раскладку и делаем окна плавающими на тех же местах
+        local m = hl.get_active_monitor()
+        local ux, uy, uw, uh = usable(m)
+        local cx, cy = ux + uw / 2, uy + uh / 2
+        -- Сначала снимаем геометрию всех окон: свойства читаются «вживую»,
+        -- а после всплытия первого окна остальные перестраиваются.
+        local plan = {}
         for _, w in ipairs(windows(ws)) do
             if not w.floating and (w.fullscreen or 0) == 0 then
-                local x, y, wd, ht = w.at.x, w.at.y, w.size.x, w.size.y
-                hl.dispatch(hl.dsp.window.float({ action = "enable", window = sel(w) }))
-                hl.dispatch(hl.dsp.window.resize({ x = wd, y = ht, window = sel(w) }))
-                hl.dispatch(hl.dsp.window.move({ x = x, y = y, window = sel(w) }))
+                local wcx, wcy = w.at.x + w.size.x / 2, w.at.y + w.size.y / 2
+                local nw = math.floor(w.size.x * SHRINK)
+                local nh = math.floor(w.size.y * SHRINK)
+                table.insert(plan, {
+                    sel = sel(w), w = nw, h = nh,
+                    x = math.floor(cx + (wcx - cx) * SPREAD - nw / 2),
+                    y = math.floor(cy + (wcy - cy) * SPREAD - nh / 2),
+                })
             end
+        end
+        -- окна разъезжаются от центра экрана и чуть уменьшаются
+        for _, p in ipairs(plan) do
+            hl.dispatch(hl.dsp.window.float({ action = "enable", window = p.sel }))
+            hl.dispatch(hl.dsp.window.resize({ x = p.w, y = p.h, window = p.sel }))
+            hl.dispatch(hl.dsp.window.move({ x = p.x, y = p.y, window = p.sel }))
         end
     end
 
@@ -110,68 +166,102 @@ end
 
 ------------------------------------------------------------------- панорама --
 
-local function set_move_anim(on)
-    if on then
-        hl.animation({ leaf = "windowsMove", enabled = true, speed = 4, bezier = "snap" })
-    else
-        hl.animation({ leaf = "windowsMove", enabled = false })
-    end
-end
-
-local function super_down()
-    return hl.is_key_down("Super_L") or hl.is_key_down("Super_R")
-end
-
-function M.pan_stop()
+local function stop()
     if pan.timer then pan.timer:set_enabled(false) end
-    if pan.dragging then
-        pan.dragging = false
-        set_move_anim(true)
+    if pan.mode then set_move_anim(true) end
+    pan.mode = nil
+    pan.vx, pan.vy = 0, 0
+end
+
+local function tick()
+    local ws = current()
+    if not ws then return stop() end
+
+    if pan.mode == "drag" then
+        local c = hl.get_cursor_pos()
+        if not c then return end
+        local dx = math.floor(c.x - pan.x + 0.5)
+        local dy = math.floor(c.y - pan.y + 0.5)
+        pan.x, pan.y = pan.x + dx, pan.y + dy
+        -- сглаженная скорость для инерции
+        pan.vx = pan.vx * 0.8 + dx * 0.2
+        pan.vy = pan.vy * 0.8 + dy * 0.2
+        if dx == 0 and dy == 0 then
+            pan.idle = pan.idle + TICK
+            -- страховка: если отпускание кнопки потерялось
+            if pan.idle > 1500 then return stop() end
+        else
+            pan.idle = 0
+            shift(ws, dx, dy)
+        end
+    elseif pan.mode == "glide" then
+        pan.vx, pan.vy = pan.vx * FRICTION, pan.vy * FRICTION
+        local dx, dy = math.floor(pan.vx + 0.5), math.floor(pan.vy + 0.5)
+        if math.abs(pan.vx) < 0.6 and math.abs(pan.vy) < 0.6 then return stop() end
+        shift(ws, dx, dy)
+    else
+        stop()
     end
 end
 
-local function pan_tick()
-    local ws = current()
-    if not ws or not active[ws.id] or not super_down() then
-        return M.pan_stop()
-    end
+local function start_drag()
     local c = hl.get_cursor_pos()
     if not c then return end
-    local dx = math.floor(c.x - pan.x + 0.5)
-    local dy = math.floor(c.y - pan.y + 0.5)
-    pan.x, pan.y = pan.x + dx, pan.y + dy
-    shift(ws, dx, dy)
-end
-
-function M.pan_start()
-    local ws = current()
-    if not ws or not active[ws.id] then return end
-    local c = hl.get_cursor_pos()
-    if not c then return end
-    pan.x, pan.y = c.x, c.y
-    pan.dragging = true
+    pan.x, pan.y, pan.vx, pan.vy, pan.idle = c.x, c.y, 0, 0, 0
+    pan.mode = "drag"
     set_move_anim(false)
     if pan.timer then
         pan.timer:set_enabled(true)
     else
-        pan.timer = hl.timer(pan_tick, { timeout = 8, type = "repeat" })
+        pan.timer = hl.timer(tick, { timeout = TICK, type = "repeat" })
     end
 end
 
-function M.nudge(dx, dy)
-    local ws = current()
-    if ws and active[ws.id] then shift(ws, dx, dy) end
+local function release()
+    if pan.mode ~= "drag" then return end
+    if math.abs(pan.vx) > 1.5 or math.abs(pan.vy) > 1.5 then
+        pan.mode = "glide"
+    else
+        stop()
+    end
 end
 
--- Сдвинуть холст так, чтобы активное окно оказалось в центре монитора
+-- ЛКМ по пустому месту: клик всё равно проходит дальше (non_consuming)
+function M.press_empty()
+    if pan.mode == "glide" then stop() end
+    if over_empty_space() then start_drag() end
+end
+
+-- Super + средняя кнопка: тянуть откуда угодно
+function M.press_any()
+    if pan.mode == "glide" then stop() end
+    if current() then start_drag() end
+end
+
+M.release = release
+
+-- Плавный сдвиг с анимацией окон
+function M.nudge(dx, dy)
+    local ws = current()
+    if ws then
+        stop()
+        shift(ws, dx, dy)
+    end
+end
+
+function M.scroll(dx, dy)
+    if over_empty_space() then M.nudge(dx, dy) end
+end
+
+-- Навести камеру на активное окно
 function M.center()
     local ws = current()
     local w = hl.get_active_window()
-    if not ws or not active[ws.id] or not w or not w.monitor then return end
-    local m = w.monitor
-    local dx = math.floor(m.x + m.width / 2 - (w.at.x + w.size.x / 2))
-    local dy = math.floor(m.y + m.height / 2 - (w.at.y + w.size.y / 2))
-    shift(ws, dx, dy)
+    if not ws or not w then return end
+    local ux, uy, uw, uh = usable(hl.get_active_monitor())
+    stop()
+    shift(ws, math.floor(ux + uw / 2 - (w.at.x + w.size.x / 2)),
+              math.floor(uy + uh / 2 - (w.at.y + w.size.y / 2)))
 end
 
 ------------------------------------------------------------------ установка --
@@ -179,7 +269,7 @@ end
 function M.setup(mod)
     load_state()
 
-    -- Новые окна на холсте сразу плавающие и по центру
+    -- Новые окна на холсте — плавающие, в центре экрана
     hl.on("window.open", function(w)
         if not w or not w.workspace or not w.workspace.id then return end
         if active[w.workspace.id] and not w.floating then
@@ -188,9 +278,12 @@ function M.setup(mod)
         end
     end)
 
-    hl.on("workspace.active", function() update_bar() end)
+    hl.on("workspace.active", function()
+        stop()
+        update_bar()
+    end)
+
     hl.on("workspace.removed", function()
-        -- пустой рабочий стол исчез -> забываем его режим
         local alive = {}
         for _, ws in ipairs(hl.get_workspaces()) do
             if ws.id then alive[ws.id] = true end
@@ -202,29 +295,31 @@ function M.setup(mod)
     end)
 
     local m = mod .. " + "
+    local pass = { non_consuming = true }
+    local pass_up = { non_consuming = true, release = true }
+
     hl.bind(m .. "F", M.toggle)
 
-    for _, btn in ipairs({ "mouse:274", "ALT + mouse:272" }) do
-        hl.bind(m .. btn, M.pan_start)
-        hl.bind(m .. btn, M.pan_stop, { release = true })
-    end
+    hl.bind("mouse:272", M.press_empty, pass)
+    hl.bind("mouse:272", M.release, pass_up)
+    hl.bind(m .. "mouse:274", M.press_any)
+    hl.bind(m .. "mouse:274", M.release, { release = true })
 
-    local step = 300
+    hl.bind("mouse_up",           function() M.scroll(0, SCROLL) end, pass)
+    hl.bind("mouse_down",         function() M.scroll(0, -SCROLL) end, pass)
+    hl.bind("SHIFT + mouse_up",   function() M.scroll(SCROLL, 0) end, pass)
+    hl.bind("SHIFT + mouse_down", function() M.scroll(-SCROLL, 0) end, pass)
+
     local dirs = {
-        { "left", "H", step, 0 }, { "right", "L", -step, 0 },
-        { "up",   "K", 0, step }, { "down",  "J", 0, -step },
+        { "left", "H", STEP, 0 }, { "right", "L", -STEP, 0 },
+        { "up",   "K", 0, STEP }, { "down",  "J", 0, -STEP },
     }
     for _, d in ipairs(dirs) do
         for _, key in ipairs({ d[1], d[2] }) do
             hl.bind(m .. "ALT + " .. key, function() M.nudge(d[3], d[4]) end, { repeating = true })
         end
     end
-
-    hl.bind(m .. "ALT + mouse_up",           function() M.nudge(0, 120) end)
-    hl.bind(m .. "ALT + mouse_down",         function() M.nudge(0, -120) end)
-    hl.bind(m .. "ALT + SHIFT + mouse_up",   function() M.nudge(120, 0) end)
-    hl.bind(m .. "ALT + SHIFT + mouse_down", function() M.nudge(-120, 0) end)
-    hl.bind(m .. "ALT + C",                  M.center)
+    hl.bind(m .. "ALT + C", M.center)
 
     update_bar()
 end
