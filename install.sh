@@ -6,6 +6,7 @@
 # Флаги:
 #   --links-only   только связать конфиги и применить тему (без пакетов и sudo)
 #   --no-nvidia    не ставить драйвер NVIDIA, даже если карта найдена
+#   --no-gaming    не ставить Steam и 32-битные драйверы
 #   -h, --help     справка
 
 set -Eeuo pipefail
@@ -16,11 +17,13 @@ WALL_DIR="$HOME/.local/share/wallpapers"
 
 LINKS_ONLY=0
 NO_NVIDIA=0
+NO_GAMING=0
 for arg in "$@"; do
     case "$arg" in
         --links-only) LINKS_ONLY=1 ;;
         --no-nvidia)  NO_NVIDIA=1 ;;
-        -h|--help)    printf '%s\n' "Flags: --links-only, --no-nvidia"; exit 0 ;;
+        --no-gaming)  NO_GAMING=1 ;;
+        -h|--help)    printf '%s\n' "Flags: --links-only, --no-nvidia, --no-gaming"; exit 0 ;;
         *) echo "Unknown flag / неизвестный флаг: $arg" >&2; exit 1 ;;
     esac
 done
@@ -176,6 +179,49 @@ options nvidia NVreg_PreserveVideoMemoryAllocations=1'
 }
 
 # ---------------------------------------------------------------------------
+# Игры: multilib, 32-битный драйвер под видеокарту, Steam, gamemode
+# ---------------------------------------------------------------------------
+setup_gaming() {
+    ((NO_GAMING)) && return 0
+    msg "$(t "Setting up gaming: Steam, 32-bit drivers, gamemode" "Настраиваю игры: Steam, 32-битные драйверы, gamemode")"
+
+    # Steam и 32-битные библиотеки лежат в multilib
+    if ! grep -q '^\[multilib\]' /etc/pacman.conf; then
+        sudo sed -i '/^#\[multilib\]/,/^#Include/ s/^#//' /etc/pacman.conf
+        grep -q '^\[multilib\]' /etc/pacman.conf \
+            || printf '\n[multilib]\nInclude = /etc/pacman.d/mirrorlist\n' | sudo tee -a /etc/pacman.conf >/dev/null
+        sudo pacman -Sy --noconfirm
+    fi
+
+    # 32-битный Vulkan/OpenGL ставим заранее под свою карту — иначе Steam
+    # потянет первый попавшийся (и для NVIDIA 580xx он будет конфликтовать)
+    local gpus
+    gpus="$(lspci | grep -Ei 'vga|3d|display' || true)"
+    if grep -qi nvidia <<<"$gpus" && ((! NO_NVIDIA)); then
+        if installed nvidia-580xx-utils; then
+            paru -S --needed --noconfirm --skipreview lib32-nvidia-580xx-utils
+        else
+            sudo pacman -S --needed --noconfirm lib32-nvidia-utils
+        fi
+    fi
+    if grep -qiE 'amd|ati|radeon' <<<"$gpus"; then
+        sudo pacman -S --needed --noconfirm lib32-mesa lib32-vulkan-radeon vulkan-radeon
+    fi
+    if grep -qi intel <<<"$gpus"; then
+        sudo pacman -S --needed --noconfirm lib32-mesa lib32-vulkan-intel vulkan-intel
+    fi
+
+    mapfile -t pkgs < <(read_list "$DOTFILES_DIR/packages/gaming.txt")
+    sudo pacman -S --needed --noconfirm "${pkgs[@]}"
+
+    # gamemode меняет приоритет процессов игры — нужна группа gamemode
+    if getent group gamemode >/dev/null && ! id -nG "$USER" | grep -qw gamemode; then
+        sudo usermod -aG gamemode "$USER"
+        NEED_REBOOT=1
+    fi
+}
+
+# ---------------------------------------------------------------------------
 # Конфиги: симлинки из репозитория, старые файлы уходят в бэкап
 # ---------------------------------------------------------------------------
 BACKUP_DIR="$HOME/.dotfiles-backup/$(date +%Y%m%d-%H%M%S)"
@@ -277,6 +323,7 @@ EOF
             eval "gsettings set org.gnome.desktop.interface $kv" 2>/dev/null || true
         done
         gsettings set org.gnome.desktop.wm.preferences button-layout ':' 2>/dev/null || true
+        gsettings set org.gnome.desktop.interface accent-color 'slate' 2>/dev/null || true
     fi
 
     xdg-user-dirs-update 2>/dev/null || true
@@ -308,6 +355,7 @@ else
     keep_sudo_alive
     install_packages
     setup_nvidia
+    setup_gaming
     link_configs
     setup_wallpaper
     setup_sddm

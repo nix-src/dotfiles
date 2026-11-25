@@ -119,6 +119,12 @@ EN = {
     'Сбросить': 'Reset',
     'Ошибка записи: ': 'Write error: ',
     'Язык интерфейса': 'Interface language',
+    'Игры': 'Games',
+    'Мгновенный вывод кадров (tearing)': 'Instant frame output (tearing)',
+    'как полноэкранный режим в Windows: кадр уходит на экран без ожидания vsync, меньше задержка ввода': 'like exclusive fullscreen on Windows: frames go to the screen without waiting for vsync, lower input lag',
+    'Дополнительные игры': 'Extra games',
+    'классы окон через |, например minecraft|osu! (CS2, Steam/Proton и gamescope уже учтены)': 'window classes separated by |, e.g. minecraft|osu! (CS2, Steam/Proton and gamescope are already covered)',
+    'В Steam добавь в параметры запуска игры: gamemoderun %command%': 'In Steam, add to the game launch options: gamemoderun %command%',
     'авто (по системе)': 'auto (system)',
     'применится после перезапуска панели и окон': 'applies to the bar, menus and this window',
 }
@@ -152,6 +158,8 @@ DEFAULTS = {
     "wallpaper": "animated",
     "idle": {"lock": 10, "screen_off": 15, "suspend": 0},
     "lang": "auto",
+    "game_tearing": True,
+    "game_classes": "",
 }
 
 LAYOUT_SWITCH = [
@@ -177,6 +185,14 @@ stacksidebar row { padding: 10px 18px; }
 button.apply { background: #c8c8c8; color: #0b0b0b; }
 button.apply:hover { background: #ededed; }
 button.tool { padding: 10px 14px; }
+.tip { color: #8a8a8a; }
+switch { background: #262626; border: 1px solid #3a3a3a; }
+switch:checked { background: #c8c8c8; border-color: #c8c8c8; }
+switch slider { background: #8a8a8a; box-shadow: none; }
+switch:checked slider { background: #0b0b0b; }
+scale trough { background: #262626; }
+scale highlight { background: #c8c8c8; }
+scale slider { background: #ededed; box-shadow: none; }
 """
 
 
@@ -461,6 +477,19 @@ class SettingsWindow(Gtk.ApplicationWindow):
         w["friction"] = slider(0.80, 0.98, 0.01, c["friction"])
         p.append(row(_("Инерция"), w["friction"], _("больше — дольше докатывается")))
 
+        # Игры
+        p = self.page("games", _("Игры"))
+        w["game_tearing"] = switch(s["game_tearing"])
+        p.append(row(_("Мгновенный вывод кадров (tearing)"), w["game_tearing"],
+                     _("как полноэкранный режим в Windows: кадр уходит на экран без ожидания vsync, меньше задержка ввода")))
+        w["game_classes"] = entry(s["game_classes"])
+        p.append(row(_("Дополнительные игры"), w["game_classes"],
+                     _("классы окон через |, например minecraft|osu! (CS2, Steam/Proton и gamescope уже учтены)")))
+        tip = Gtk.Label(label=_("В Steam добавь в параметры запуска игры: gamemoderun %command%"), xalign=0, wrap=True)
+        tip.add_css_class("tip")
+        tip.set_margin_top(14)
+        p.append(tip)
+
         # Питание
         i = s["idle"]
         p = self.page("power", _("Питание"))
@@ -540,6 +569,8 @@ class SettingsWindow(Gtk.ApplicationWindow):
             s[k] = w[k].get_text().strip() or DEFAULTS[k]
         s["wallpaper"] = dd_value(w["wallpaper"])
         s["lang"] = dd_value(w["lang"])
+        s["game_tearing"] = w["game_tearing"].get_active()
+        s["game_classes"] = w["game_classes"].get_text().strip().strip("|")
         s["canvas"] = {k: round(w[k].get_value(), 2) for k in ("spread", "shrink", "pad", "friction")}
         s["idle"] = {k: int(w[k].get_value()) for k in ("lock", "screen_off", "suspend")}
         return s

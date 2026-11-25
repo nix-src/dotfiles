@@ -27,7 +27,7 @@ The script clones the repo into `~/dotfiles` and:
 Conflicting packages (pulseaudio, repository NVIDIA drivers on legacy cards) are removed
 automatically, so the script never stops on prompts. sudo asks for the password once at the start.
 
-Flags: `--links-only` (configs only), `--no-nvidia`.
+Flags: `--links-only` (configs only), `--no-nvidia`, `--no-gaming` (skip Steam and 32-bit drivers).
 
 ## What's inside
 
@@ -102,6 +102,7 @@ stops the inertia.
 | Display | resolution and refresh rate, scale, position of each monitor |
 | Keyboard and mouse | layouts, layout switch, key repeat, sensitivity, acceleration, scrolling |
 | Appearance | gaps, border, animations, rotating border, dimming, wallpaper mode, interface language |
+| Games | tearing (no vsync wait), extra game window classes |
 | Infinite canvas | window spread and scale, edge margin, inertia |
 | Power | lock, screen off and suspend on idle |
 | Applications | terminal, browser, file manager |
@@ -115,6 +116,24 @@ The "Defaults" button deletes it and restores the repository defaults.
 Pick **Hyprland (uwsm-managed)** on the login screen — services then run as systemd units.
 A plain **Hyprland** session works too: autostart, environment variables, the polkit agent
 and logout handle both.
+
+## Gaming
+
+Wayland has no exclusive fullscreen like Windows: games always go through the compositor, which
+waits for vsync by default — that is the extra input lag. The config fixes it for game windows
+(CS2, Steam/Proton `steam_app_*`, gamescope, Wine `*.exe`):
+
+- **tearing** (`immediate`): frames reach the screen without waiting for vsync, like exclusive
+  fullscreen on Windows;
+- **direct scanout**: a fullscreen game is shown directly, bypassing compositing;
+- **VRR** in fullscreen games when the monitor supports it;
+- the screen does not dim or lock while playing.
+
+The installer enables `multilib`, installs the 32-bit driver for your GPU first (for GTX 9xx/10xx —
+`lib32-nvidia-580xx-utils`, so Steam does not pull a conflicting one), then Steam and gamemode, and
+adds you to the `gamemode` group. In Steam, set the game launch options to
+`gamemoderun %command%`. Tearing and extra game window classes can be changed in Settings → Games.
+To check that tearing works, run `hyprctl monitors` while playing: `activelyTearing: true`.
 
 ## Performance
 

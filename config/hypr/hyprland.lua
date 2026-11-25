@@ -29,6 +29,8 @@ local S = {
     browser        = "firefox",
     files          = "thunar",
     canvas         = {},            -- spread, shrink, pad, friction
+    game_tearing   = true,          -- игры: кадр сразу на экран, без ожидания vsync
+    game_classes   = "",            -- доп. классы окон игр (regex через |)
 }
 local local_dir = os.getenv("HOME") .. "/.config/dotfiles-local"
 do
@@ -326,6 +328,43 @@ hl.on("config.reloaded", function()
     -- без мониторов (например, при hyprland --verify-config) ничего не трогаем
     if #hl.get_monitors() > 0 then _G.wallpaper_refresh(true) end
 end)
+
+-------------
+--  ИГРЫ  --
+-------------
+
+-- В Wayland нет «эксклюзивного» полноэкранного режима, как в Windows: игра всегда
+-- выводится через композитор, а он по умолчанию ждёт vsync — отсюда задержка.
+-- Для окон игр:
+--   immediate      — tearing: кадр уходит на экран сразу, без ожидания vsync
+--                    (действует для полноэкранного окна, как настоящий fullscreen);
+--   content=game   — с render.direct_scanout = 2 полноэкранная игра выводится
+--                    на экран напрямую, минуя композитинг;
+--   idle_inhibit   — экран не гаснет и не блокируется во время игры.
+-- CS2 (нативный), игры Steam/Proton (steam_app_*), gamescope, игры Wine (*.exe).
+local games = "cs2|steam_app_[0-9]+|gamescope|.+\\.exe"
+if S.game_classes ~= "" then games = games .. "|" .. S.game_classes end
+
+hl.config({
+    general = { allow_tearing = S.game_tearing },
+    render  = { direct_scanout = 2 },   -- только для окон с типом содержимого «игра»
+    misc    = { vrr = 2 },              -- адаптивная синхронизация в полноэкранных играх
+})
+
+hl.window_rule({
+    name         = "games",
+    match        = { class = "^(" .. games .. ")$" },
+    immediate    = S.game_tearing,
+    content      = "game",
+    idle_inhibit = "always",
+})
+
+-- Видео в полноэкранном режиме тоже не даёт экрану гаснуть
+hl.window_rule({
+    name         = "fullscreen-no-idle",
+    match        = { fullscreen = true },
+    idle_inhibit = "fullscreen",
+})
 
 --------------------
 --  WINDOW RULES  --
