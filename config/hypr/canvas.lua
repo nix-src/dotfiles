@@ -196,7 +196,10 @@ function M.toggle()
 
     save_state()
     update_bar()
+    if _G.wallpaper_refresh then _G.wallpaper_refresh() end
 end
+
+function M.is_active(id) return active[id] == true end
 
 ------------------------------------------------------------------- панорама --
 

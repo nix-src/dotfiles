@@ -10,10 +10,25 @@
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 
-import gi
+# Быстрый путь: окно открывает уже запущенный фоновый процесс (scripts/player),
+# в котором GTK загружен заранее. Без него — запускаемся как обычно.
+if __name__ == "__main__" and "--standalone" not in sys.argv:
+    try:
+        with open(os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "dotfiles-ui.pid")) as _f:
+            _pid = int(_f.read().strip())
+        with open(f"/proc/{_pid}/cmdline", "rb") as _f:
+            _ours = b"scripts/player" in _f.read()
+        if _ours:
+            os.kill(_pid, signal.SIGUSR2)
+            sys.exit(0)
+    except (OSError, ValueError):
+        pass
+
+import gi  # noqa: E402
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Gdk", "4.0")

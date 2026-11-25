@@ -207,7 +207,7 @@ bind(mod .. " + Return",         exec(terminal))
 bind(mod .. " + D",              exec(menu))
 bind(mod .. " + E",              exec(fileManager))
 bind(mod .. " + B",              exec(browser))
-bind(mod .. " + I",              exec(scripts .. "/settings"))
+bind(mod .. " + I",              exec(scripts .. "/ui settings"))
 bind(mod .. " + C",              exec(scripts .. "/clipboard"))
 bind(mod .. " + N",              exec("makoctl dismiss --all"))
 
@@ -276,7 +276,56 @@ bind("XF86AudioPlay",         exec("playerctl play-pause"), { locked = true })
 bind("XF86AudioPause",        exec("playerctl play-pause"), { locked = true })
 
 -- Бесконечный холст (Super + F и панорамирование) — см. canvas.lua
-require("canvas").setup(mod, S.canvas)
+local canvas = require("canvas")
+canvas.setup(mod, S.canvas)
+
+---------------------------------
+--  ВИДЕООБОИ: ТОЛЬКО КОГДА ВИДНО  --
+---------------------------------
+
+-- Видео (mpvpaper) стоит ~8% CPU и заставляет Hyprland перерисовывать экран.
+-- Пока на экране есть окна, обои почти не видны — процесс замораживается
+-- (SIGSTOP, на экране остаётся последний кадр) и оживает на пустом рабочем
+-- столе или в режиме холста.
+local function wallpaper_visible()
+    for _, m in ipairs(hl.get_monitors()) do
+        local ws = m.active_workspace
+        if ws and ws.id and not ws.special then
+            if canvas.is_active(ws.id) then return true end
+            local empty = true
+            for _, w in ipairs(hl.get_windows({ workspace = ws })) do
+                if w.mapped and not w.hidden then empty = false break end
+            end
+            if empty then return true end
+        end
+    end
+    return false
+end
+
+local wallpaper_state = nil
+function _G.wallpaper_refresh(force)
+    local run = wallpaper_visible()
+    if force or run ~= wallpaper_state then
+        wallpaper_state = run
+        hl.exec_cmd(run and "pkill -CONT -x mpvpaper" or "pkill -STOP -x mpvpaper")
+    end
+end
+
+-- События приходят до того, как список окон обновится, — проверяем чуть позже
+local function wallpaper_soon()
+    if #hl.get_monitors() == 0 then return end
+    hl.timer(function() _G.wallpaper_refresh() end, { timeout = 60, type = "oneshot" })
+end
+for _, ev in ipairs({ "workspace.active", "monitor.focused", "window.open", "window.close",
+                      "window.destroy", "window.move_to_workspace" }) do
+    hl.on(ev, wallpaper_soon)
+end
+-- после перезагрузки конфига состояние неизвестно — проверяем заново
+-- (при старте сеанса это делает сам скрипт обоев)
+hl.on("config.reloaded", function()
+    -- без мониторов (например, при hyprland --verify-config) ничего не трогаем
+    if #hl.get_monitors() > 0 then _G.wallpaper_refresh(true) end
+end)
 
 --------------------
 --  WINDOW RULES  --
@@ -297,7 +346,7 @@ hl.window_rule({
 -- Утилиты открываются плавающими по центру
 hl.window_rule({
     name  = "float-utils",
-    match = { class = "^(float|dotfiles\\.settings|org\\.pulseaudio\\.pavucontrol|nm-connection-editor|blueman-manager|xdg-desktop-portal-gtk|hyprland-run)$" },
+    match = { class = "^(float|dotfiles\\.settings|dotfiles\\.shell|org\\.pulseaudio\\.pavucontrol|nm-connection-editor|blueman-manager|xdg-desktop-portal-gtk|hyprland-run)$" },
     float  = true,
     size   = "900 600",
     center = true,

@@ -116,6 +116,14 @@ Pick **Hyprland (uwsm-managed)** on the login screen — services then run as sy
 A plain **Hyprland** session works too: autostart, environment variables, the polkit agent
 and logout handle both.
 
+## Performance
+
+- The video wallpaper only plays while it is actually visible (empty workspace or canvas mode);
+  otherwise the process is frozen on its last frame, so it costs nothing.
+- The mini player and the settings window live in one background process with GTK preloaded,
+  and the settings window is prepared in advance: clicks in the bar open them in ~60–80 ms.
+- The media module and the mini player react to player events instead of polling.
+
 ## Language
 
 The interface (bar, power menu, notifications, settings window, login screen, installer) is

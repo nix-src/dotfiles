@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
-"""Мини-плеер — всплывающая панель под треком в waybar.
+"""Мини-плеер — всплывающая панель под треком в waybar — и хост окна настроек.
 
     player          фоновый процесс (запускается вместе с сессией)
     player toggle   показать/скрыть панель (клик по треку в waybar)
+
+Тот же процесс открывает окно настроек по SIGUSR2 (scripts/settings шлёт
+его сам): GTK уже загружен, поэтому окно появляется мгновенно.
 
 Layer-shell поверхность (не окно): не участвует в тайлинге и фокусе,
 появляется под курсором. Закрывается повторным кликом по треку, Escape
@@ -14,14 +17,17 @@ import os
 import signal
 import sys
 
-PIDFILE = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "miniplayer.pid")
+PIDFILE = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "dotfiles-ui.pid")
 
 
 def running_pid():
+    """pid живого фонового процесса (проверяем, что это именно он, а не чужой pid)."""
     try:
         with open(PIDFILE) as f:
             pid = int(f.read().strip())
-        os.kill(pid, 0)
+        with open(f"/proc/{pid}/cmdline", "rb") as f:
+            if b"scripts/player" not in f.read():
+                return None
         return pid
     except (OSError, ValueError):
         return None
@@ -54,6 +60,14 @@ gi.require_version("Gdk", "4.0")
 gi.require_version("GdkPixbuf", "2.0")
 gi.require_version("Playerctl", "2.0")
 from gi.repository import Gdk, GdkPixbuf, Gio, GLib, Gtk, Pango, Playerctl  # noqa: E402
+
+# Библиотека layer-shell уже загружена; дочерним процессам (hyprctl, терминалы
+# из настроек и т.п.) она не нужна и только замедляет их запуск.
+_pre = [x for x in os.environ.get("LD_PRELOAD", "").split(":") if x and x != _LS]
+if _pre:
+    os.environ["LD_PRELOAD"] = ":".join(_pre)
+else:
+    os.environ.pop("LD_PRELOAD", None)
 
 try:
     gi.require_version("GLibUnix", "2.0")
@@ -369,7 +383,7 @@ class Popup(Gtk.ApplicationWindow):
 
 class App(Gtk.Application):
     def __init__(self, show):
-        super().__init__(application_id="dotfiles.player", flags=Gio.ApplicationFlags.NON_UNIQUE)
+        super().__init__(application_id="dotfiles.shell", flags=Gio.ApplicationFlags.NON_UNIQUE)
         self.show_on_start = show
         self.popup = None
         self.art_cache = {}   # url -> Gdk.Texture (или None, если не загрузилась)
@@ -414,6 +428,11 @@ class App(Gtk.Application):
         with open(PIDFILE, "w") as f:
             f.write(str(os.getpid()))
         GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, signal.SIGUSR1, self.toggle)
+        GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, signal.SIGUSR2, self.open_settings)
+        self.settings_ready = None
+        self.settings_lang = None
+        self.connect("window-removed", self.on_window_removed)
+        GLib.timeout_add(1500, self.prebuild_settings)   # заранее, чтобы первое открытие было мгновенным
         for sig in (signal.SIGTERM, signal.SIGINT):
             GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, sig, self.quit_clean)
 
@@ -429,6 +448,56 @@ class App(Gtk.Application):
             self.popup = Popup(self)
             self.popup.connect("close-request", self.on_popup_closed)
             self.popup.present()
+        return True
+
+    # ------------------------------------------------------------ настройки
+    # Окно настроек строится заранее и ждёт скрытым: по клику его остаётся
+    # только показать. После закрытия готовится новое (со свежими значениями).
+    def prebuild_settings(self):
+        self.load_settings()
+        mod = self.settings_mod
+        if self.settings_ready is None and not any(isinstance(w, mod.SettingsWindow) for w in self.get_windows()):
+            mod.LANG = mod.detect_lang()
+            self.settings_ready = mod.SettingsWindow(self)
+            self.settings_ready.realize()     # поверхность и отрисовщик готовятся заранее
+            self.settings_lang = mod.LANG
+        return False
+
+    def on_window_removed(self, _app, win):
+        mod = getattr(self, "settings_mod", None)
+        if mod and isinstance(win, mod.SettingsWindow) and win is not self.settings_ready:
+            GLib.timeout_add(300, self.prebuild_settings)
+
+    def load_settings(self):
+        if getattr(self, "settings_mod", None) is None:
+            import importlib.machinery
+            import importlib.util
+            path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "settings")
+            loader = importlib.machinery.SourceFileLoader("dotfiles_settings", path)
+            spec = importlib.util.spec_from_loader("dotfiles_settings", loader)
+            mod = importlib.util.module_from_spec(spec)
+            loader.exec_module(mod)
+            css = Gtk.CssProvider()
+            css.load_from_string(mod.CSS)
+            Gtk.StyleContext.add_provider_for_display(
+                Gdk.Display.get_default(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+            self.settings_mod = mod
+        return False
+
+    def open_settings(self):
+        self.load_settings()
+        mod = self.settings_mod
+        for w in self.get_windows():          # уже открыто — просто поднять
+            if isinstance(w, mod.SettingsWindow) and w is not self.settings_ready:
+                w.present()
+                return True
+        win, self.settings_ready = self.settings_ready, None
+        if win is None or mod.detect_lang() != self.settings_lang:   # язык сменился — пересобрать
+            if win is not None:
+                win.destroy()
+            mod.LANG = mod.detect_lang()
+            win = mod.SettingsWindow(self)
+        win.present()
         return True
 
     def on_popup_closed(self, _w):

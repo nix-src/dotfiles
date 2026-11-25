@@ -4,7 +4,7 @@
 Сетка тусклых точек на почти чёрном фоне, по которой медленно дрейфуют два
 мягких «пятна света». Анимация зациклена без шва. Только stdlib + ffmpeg.
 
-    generate.py OUT_DIR [--size 1920x1080] [--fps 24] [--seconds 24]
+    generate.py OUT_DIR [--size 1920x1080] [--fps 20] [--seconds 24]
 
 Создаёт OUT_DIR/drift.mp4 (видео для mpvpaper) и OUT_DIR/drift.png (кадр
 для экрана блокировки и SDDM).
@@ -26,7 +26,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("out_dir")
     ap.add_argument("--size", default="1920x1080")
-    ap.add_argument("--fps", type=int, default=24)
+    ap.add_argument("--fps", type=int, default=20)
     ap.add_argument("--seconds", type=int, default=24)
     args = ap.parse_args()
 

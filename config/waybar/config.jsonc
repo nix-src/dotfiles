@@ -50,7 +50,7 @@
         "return-type": "json",
         "escape": false,
         "tooltip": false,
-        "on-click": "~/.config/hypr/scripts/player toggle",
+        "on-click": "~/.config/hypr/scripts/ui player",
         "on-click-right": "playerctl play-pause",
         "on-click-middle": "playerctl next"
     },
@@ -76,7 +76,7 @@
 
     "custom/settings": {
         "format": "󰢻",
-        "on-click": "~/.config/hypr/scripts/settings"
+        "on-click": "~/.config/hypr/scripts/ui settings"
     },
 
     "custom/power": {
