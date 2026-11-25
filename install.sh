@@ -114,7 +114,7 @@ setup_nvidia() {
     [[ -n $gpu ]] || return 0
     msg "Найдена видеокарта NVIDIA: ${gpu#*: }"
 
-    local headers=() k
+    local changed=0 headers=() k
     for k in linux linux-lts linux-zen linux-hardened; do
         installed "$k" && headers+=("$k-headers")
     done
@@ -129,28 +129,46 @@ setup_nvidia() {
             remove_if_installed nvidia nvidia-lts nvidia-dkms nvidia-open nvidia-open-lts \
                 nvidia-open-dkms nvidia-utils lib32-nvidia-utils opencl-nvidia nvidia-settings
             paru -S --needed --noconfirm --skipreview nvidia-580xx-dkms nvidia-580xx-utils
-            ((had_lib32)) && paru -S --needed --noconfirm --skipreview lib32-nvidia-580xx-utils
+            if ((had_lib32)); then
+                paru -S --needed --noconfirm --skipreview lib32-nvidia-580xx-utils
+            fi
+            changed=1
         fi
     else
-        remove_if_installed nvidia nvidia-lts nvidia-dkms
-        sudo pacman -S --needed --noconfirm nvidia-open-dkms nvidia-utils
+        if ! installed nvidia-open-dkms; then
+            remove_if_installed nvidia nvidia-lts nvidia-dkms
+            sudo pacman -S --needed --noconfirm nvidia-open-dkms nvidia-utils
+            changed=1
+        fi
     fi
 
-    printf '%s\n' 'options nvidia_drm modeset=1 fbdev=1' \
-                  'options nvidia NVreg_PreserveVideoMemoryAllocations=1' \
-        | sudo tee /etc/modprobe.d/nvidia.conf >/dev/null
+    local modprobe=/etc/modprobe.d/nvidia.conf
+    local want='options nvidia_drm modeset=1 fbdev=1
+options nvidia NVreg_PreserveVideoMemoryAllocations=1'
+    if [[ "$(cat "$modprobe" 2>/dev/null)" != "$want" ]]; then
+        printf '%s\n' "$want" | sudo tee "$modprobe" >/dev/null
+        changed=1
+    fi
 
     # Ранняя загрузка модулей и отключение kms-хука (он подтягивает nouveau)
-    local conf=/etc/mkinitcpio.conf
+    local conf=/etc/mkinitcpio.conf before
+    before="$(sha256sum "$conf")"
     [[ -e $conf.bak ]] || sudo cp "$conf" "$conf.bak"
     sudo sed -i -E '/^HOOKS=/ s/ kms//' "$conf"
     if ! grep -qE '^MODULES=.*nvidia_drm' "$conf"; then
         sudo sed -i -E 's/^MODULES=\((.*)\)/MODULES=(\1 nvidia nvidia_modeset nvidia_uvm nvidia_drm)/; s/^MODULES=\( /MODULES=(/' "$conf"
     fi
-    sudo mkinitcpio -P
+    [[ "$(sha256sum "$conf")" == "$before" ]] || changed=1
 
+    if ((changed)); then
+        sudo mkinitcpio -P
+    fi
     sudo systemctl enable nvidia-suspend.service nvidia-hibernate.service nvidia-resume.service
-    NEED_REBOOT=1
+
+    # Перезагрузка нужна, только если драйвер ещё не загружен или что-то поменялось
+    if ((changed)) || [[ ! -e /proc/driver/nvidia/version ]]; then
+        NEED_REBOOT=1
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -183,6 +201,13 @@ link_configs() {
         if [[ -e $f ]]; then link "$f" "$HOME/$(basename "$f")"; fi
     done
     chmod +x "$DOTFILES_DIR"/config/hypr/scripts/*
+
+    # Ярлыки для лаунчера (пути подставляются под текущего пользователя)
+    local apps="$HOME/.local/share/applications"
+    mkdir -p "$apps"
+    for f in "$DOTFILES_DIR"/extra/applications/*.desktop; do
+        sed "s#@SETTINGS@#$HOME/.config/hypr/scripts/settings#" "$f" > "$apps/$(basename "$f")"
+    done
 }
 
 # ---------------------------------------------------------------------------

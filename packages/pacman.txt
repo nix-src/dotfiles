@@ -74,6 +74,10 @@ qt6ct
 qt5-wayland
 qt6-wayland
 
+# Окно настроек (GTK4 + Python)
+gtk4
+python-gobject
+
 # Обои (генерация и проигрывание)
 ffmpeg
 python

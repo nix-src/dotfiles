@@ -1,12 +1,20 @@
 #!/usr/bin/env bash
-# Анимированные обои (mpvpaper). Если mpvpaper или видео нет — остаётся
-# сплошной фон из misc.background_color.
-video="$HOME/.local/share/wallpapers/drift.mp4"
+# Обои: animated (видео), static (кадр) или none (сплошной фон).
+# Режим выбирается в окне настроек и хранится в ~/.config/dotfiles-local/wallpaper.
+dir="$HOME/.local/share/wallpapers"
+mode="$(cat "$HOME/.config/dotfiles-local/wallpaper" 2>/dev/null || echo animated)"
 
 pkill -x mpvpaper 2>/dev/null
-command -v mpvpaper >/dev/null && [[ -f $video ]] || exit 0
+command -v mpvpaper >/dev/null || exit 0
+
+case "$mode" in
+    animated) file="$dir/drift.mp4" ;;
+    static)   file="$dir/drift.png" ;;
+    *)        exit 0 ;;
+esac
+[[ -f $file ]] || exit 0
 
 # -p: пауза, когда обои закрыты окнами (почти ноль нагрузки)
 exec mpvpaper -p \
-    -o "no-audio loop hwdec=auto panscan=1.0 really-quiet" \
-    '*' "$video"
+    -o "no-audio loop hwdec=auto panscan=1.0 image-display-duration=inf really-quiet" \
+    '*' "$file"

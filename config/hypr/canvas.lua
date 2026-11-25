@@ -7,14 +7,18 @@
 --   Super + Alt + стрелки / HJKL     плавный сдвиг холста
 --   Super + Alt + C                  плавно навести камеру на активное окно
 --
+-- Холст ограничен: экран не уезжает дальше крайних окон плюс запас PAD.
+--
 -- При входе в режим холста окна становятся плавающими, чуть уменьшаются и
 -- «разъезжаются» от центра, освобождая пространство. Новые окна открываются
 -- в центре экрана. Состояние переживает перезагрузку конфига.
 
 local M = {}
 
+-- Значения по умолчанию; переопределяются через окно настроек (M.setup(mod, opts))
 local SPREAD   = 1.35   -- во сколько раз растянуть расстояния от центра при входе
 local SHRINK   = 0.82   -- масштаб окон при входе
+local PAD      = 0.35   -- насколько можно уехать за крайние окна (доля экрана)
 local STEP     = 400    -- шаг клавиатурного сдвига, px
 local SCROLL   = 90     -- шаг прокрутки колесом, px
 local FRICTION = 0.94   -- затухание инерции за тик
@@ -55,7 +59,7 @@ local function update_bar()
     local ws = hl.get_active_workspace()
     local f = io.open(bar_file, "w")
     if f then
-        f:write((ws and ws.id and active[ws.id]) and "canvas" or "")
+        f:write((ws and ws.id and active[ws.id]) and "∞ infinite" or "")
         f:close()
     end
     hl.exec_cmd("pkill -RTMIN+8 waybar")
@@ -102,13 +106,43 @@ local function over_empty_space()
     return true
 end
 
+-- Границы холста: экран не может уехать дальше крайних окон плюс запас PAD.
+-- Чем больше окон и чем шире они разложены, тем больше доступное поле.
+local function clamp(ws, dx, dy)
+    local x1, y1, x2, y2
+    for _, w in ipairs(windows(ws)) do
+        if w.floating and not w.pinned then
+            x1 = math.min(x1 or w.at.x, w.at.x)
+            y1 = math.min(y1 or w.at.y, w.at.y)
+            x2 = math.max(x2 or w.at.x + w.size.x, w.at.x + w.size.x)
+            y2 = math.max(y2 or w.at.y + w.size.y, w.at.y + w.size.y)
+        end
+    end
+    if not x1 then return 0, 0 end
+    local ux, uy, uw, uh = usable(hl.get_active_monitor())
+
+    -- Допустимый диапазон сдвига по оси: если содержимое (с запасом) шире экрана —
+    -- экран остаётся внутри него, если уже — содержимое остаётся внутри экрана.
+    -- Ноль всегда разрешён, чтобы не дёргать холст, уже стоящий за границей.
+    local function axis(d, lo, hi, vlo, vlen, pad)
+        local a, b = (vlo + vlen) - (hi + pad), vlo - (lo - pad)
+        local min_d, max_d = math.min(a, b, 0), math.max(a, b, 0)
+        return math.max(min_d, math.min(max_d, d))
+    end
+    return math.floor(axis(dx, x1, x2, ux, uw, uw * PAD)),
+           math.floor(axis(dy, y1, y2, uy, uh, uh * PAD))
+end
+
+-- Сдвинуть все окна холста; возвращает фактический сдвиг (с учётом границ)
 local function shift(ws, dx, dy)
-    if dx == 0 and dy == 0 then return end
+    dx, dy = clamp(ws, dx, dy)
+    if dx == 0 and dy == 0 then return 0, 0 end
     for _, w in ipairs(windows(ws)) do
         if w.floating and not w.pinned and (w.fullscreen or 0) == 0 then
             hl.dispatch(hl.dsp.window.move({ x = dx, y = dy, relative = true, window = sel(w) }))
         end
     end
+    return dx, dy
 end
 
 local function set_move_anim(on)
@@ -198,7 +232,10 @@ local function tick()
         pan.vx, pan.vy = pan.vx * FRICTION, pan.vy * FRICTION
         local dx, dy = math.floor(pan.vx + 0.5), math.floor(pan.vy + 0.5)
         if math.abs(pan.vx) < 0.6 and math.abs(pan.vy) < 0.6 then return stop() end
-        shift(ws, dx, dy)
+        local ax, ay = shift(ws, dx, dy)
+        -- упёрлись в границу — гасим инерцию по этой оси
+        if ax ~= dx then pan.vx = 0 end
+        if ay ~= dy then pan.vy = 0 end
     else
         stop()
     end
@@ -266,7 +303,12 @@ end
 
 ------------------------------------------------------------------ установка --
 
-function M.setup(mod)
+function M.setup(mod, opts)
+    opts = opts or {}
+    SPREAD   = tonumber(opts.spread)   or SPREAD
+    SHRINK   = tonumber(opts.shrink)   or SHRINK
+    PAD      = tonumber(opts.pad)      or PAD
+    FRICTION = tonumber(opts.friction) or FRICTION
     load_state()
 
     -- Новые окна на холсте — плавающие, в центре экрана

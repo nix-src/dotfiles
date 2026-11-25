@@ -4,8 +4,43 @@
 local hyprdir = (debug.getinfo(1, "S").source:match("^@(.*)/[^/]*$")) or (os.getenv("HOME") .. "/.config/hypr")
 package.path = hyprdir .. "/?.lua;" .. package.path
 
-local terminal    = "kitty"
-local fileManager = "thunar"
+----------------
+--  SETTINGS  --
+----------------
+
+-- Значения по умолчанию. Окно настроек (Super + I) сохраняет изменения в
+-- ~/.config/dotfiles-local/settings.lua — этот файл не в репозитории.
+local S = {
+    monitors       = {},            -- [output] = { mode =, position =, scale = }
+    kb_layout      = "us,ru",
+    kb_options     = "grp:alt_shift_toggle",
+    sensitivity    = 0,
+    accel_flat     = false,
+    natural_scroll = false,
+    repeat_rate    = 35,
+    repeat_delay   = 250,
+    gaps_in        = 4,
+    gaps_out       = 8,
+    border_size    = 1,
+    animations     = true,
+    border_anim    = true,
+    dim_inactive   = true,
+    terminal       = "kitty",
+    browser        = "firefox",
+    files          = "thunar",
+    canvas         = {},            -- spread, shrink, pad, friction
+}
+local local_dir = os.getenv("HOME") .. "/.config/dotfiles-local"
+do
+    local ok, user = pcall(dofile, local_dir .. "/settings.lua")
+    if ok and type(user) == "table" then
+        for k, v in pairs(user) do S[k] = v end
+    end
+end
+
+local terminal    = S.terminal
+local fileManager = S.files
+local browser     = S.browser
 local menu        = "fuzzel"
 local scripts     = os.getenv("HOME") .. "/.config/hypr/scripts"
 local mod         = "SUPER"
@@ -20,6 +55,14 @@ hl.monitor({
     position = "auto",
     scale    = 1,
 })
+for name, m in pairs(S.monitors) do
+    hl.monitor({
+        output   = name,
+        mode     = m.mode or "preferred",
+        position = m.position or "auto",
+        scale    = tonumber(m.scale) or 1,
+    })
+end
 
 -----------------
 --  AUTOSTART  --
@@ -29,7 +72,7 @@ hl.on("hyprland.start", function()
     hl.exec_cmd("uwsm app -- " .. scripts .. "/wallpaper")
     hl.exec_cmd("uwsm app -- waybar")
     hl.exec_cmd("uwsm app -- mako")
-    hl.exec_cmd("uwsm app -- hypridle")
+    hl.exec_cmd("uwsm app -- " .. scripts .. "/idle")
     hl.exec_cmd("uwsm app -- wl-paste --type text --watch cliphist store")
     hl.exec_cmd("uwsm app -- wl-paste --type image --watch cliphist store")
 end)
@@ -45,9 +88,9 @@ hl.env("HYPRCURSOR_SIZE", "24")
 
 hl.config({
     general = {
-        gaps_in     = 4,
-        gaps_out    = 8,
-        border_size = 1,
+        gaps_in     = S.gaps_in,
+        gaps_out    = S.gaps_out,
+        border_size = S.border_size,
         col = {
             active_border   = { colors = { "rgba(b0b0b0ff)", "rgba(3a3a3aff)", "rgba(b0b0b0ff)" }, angle = 45 },
             inactive_border = "rgba(1e1e1eff)",
@@ -61,14 +104,14 @@ hl.config({
         rounding         = 0,
         active_opacity   = 1.0,
         inactive_opacity = 1.0,
-        dim_inactive     = true,
+        dim_inactive     = S.dim_inactive,
         dim_strength     = 0.12,
         dim_special      = 0.4,
         shadow = { enabled = false },
         blur   = { enabled = false },
     },
 
-    animations = { enabled = true },
+    animations = { enabled = S.animations },
 
     dwindle = { preserve_split = true },
 
@@ -83,12 +126,14 @@ hl.config({
     },
 
     input = {
-        kb_layout    = "us,ru",
-        kb_options   = "grp:alt_shift_toggle",
-        follow_mouse = 1,
-        sensitivity  = 0,
-        repeat_rate  = 35,
-        repeat_delay = 250,
+        kb_layout     = S.kb_layout,
+        kb_options    = S.kb_options,
+        follow_mouse  = 1,
+        sensitivity   = S.sensitivity,
+        accel_profile = S.accel_flat and "flat" or "adaptive",
+        natural_scroll = S.natural_scroll,
+        repeat_rate   = S.repeat_rate,
+        repeat_delay  = S.repeat_delay,
         touchpad = { natural_scroll = true },
     },
 
@@ -119,7 +164,7 @@ hl.animation({ leaf = "fadeIn",           enabled = true, speed = 3,   bezier = 
 hl.animation({ leaf = "fadeOut",          enabled = true, speed = 3,   bezier = "snap" })
 hl.animation({ leaf = "fadeDim",          enabled = true, speed = 4,   bezier = "smooth" })
 hl.animation({ leaf = "border",           enabled = true, speed = 5,   bezier = "smooth" })
-hl.animation({ leaf = "borderangle",      enabled = true, speed = 60,  bezier = "linear", style = "loop" })
+hl.animation({ leaf = "borderangle",      enabled = S.border_anim, speed = 60,  bezier = "linear", style = "loop" })
 hl.animation({ leaf = "layersIn",         enabled = true, speed = 3,   bezier = "over",   style = "slide" })
 hl.animation({ leaf = "layersOut",        enabled = true, speed = 2.5, bezier = "snap",   style = "fade" })
 hl.animation({ leaf = "workspaces",       enabled = true, speed = 4,   bezier = "smooth", style = "slidefade 12%" })
@@ -140,7 +185,8 @@ local function exec(cmd) return hl.dsp.exec_cmd(cmd) end
 bind(mod .. " + Return",         exec(terminal))
 bind(mod .. " + D",              exec(menu))
 bind(mod .. " + E",              exec(fileManager))
-bind(mod .. " + B",              exec("firefox"))
+bind(mod .. " + B",              exec(browser))
+bind(mod .. " + I",              exec(scripts .. "/settings"))
 bind(mod .. " + C",              exec(scripts .. "/clipboard"))
 bind(mod .. " + N",              exec("makoctl dismiss --all"))
 
@@ -209,7 +255,7 @@ bind("XF86AudioPlay",         exec("playerctl play-pause"), { locked = true })
 bind("XF86AudioPause",        exec("playerctl play-pause"), { locked = true })
 
 -- Бесконечный холст (Super + F и панорамирование) — см. canvas.lua
-require("canvas").setup(mod)
+require("canvas").setup(mod, S.canvas)
 
 --------------------
 --  WINDOW RULES  --
@@ -230,7 +276,7 @@ hl.window_rule({
 -- Утилиты открываются плавающими по центру
 hl.window_rule({
     name  = "float-utils",
-    match = { class = "^(float|org\\.pulseaudio\\.pavucontrol|nm-connection-editor|blueman-manager|xdg-desktop-portal-gtk|hyprland-run)$" },
+    match = { class = "^(float|dotfiles\\.settings|org\\.pulseaudio\\.pavucontrol|nm-connection-editor|blueman-manager|xdg-desktop-portal-gtk|hyprland-run)$" },
     float  = true,
     size   = "900 600",
     center = true,

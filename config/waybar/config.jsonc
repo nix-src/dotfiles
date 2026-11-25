@@ -6,7 +6,7 @@
 
     "modules-left": ["hyprland/workspaces", "custom/canvas"],
     "modules-center": ["clock"],
-    "modules-right": ["tray", "hyprland/language", "cpu", "memory", "disk", "pulseaudio", "battery"],
+    "modules-right": ["tray", "hyprland/language", "cpu", "memory", "disk", "pulseaudio", "battery", "custom/settings", "custom/power"],
 
     "hyprland/workspaces": {
         "format": "{id}",
@@ -72,6 +72,18 @@
         "format": "bat {capacity}%",
         "format-charging": "bat {capacity}%+",
         "states": { "warning": 25, "critical": 10 }
+    },
+
+    "custom/settings": {
+        "format": "󰒓",
+        "tooltip-format": "настройки",
+        "on-click": "~/.config/hypr/scripts/settings"
+    },
+
+    "custom/power": {
+        "format": "⏻",
+        "tooltip-format": "питание",
+        "on-click": "~/.config/hypr/scripts/powermenu"
     },
 
     "tray": {
