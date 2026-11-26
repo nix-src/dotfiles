@@ -23,7 +23,7 @@ local S = {
     gaps_out       = 8,
     border_size    = 1,
     animations     = true,
-    border_anim    = true,
+    border_anim    = false,          -- вращение рамки: перерисовка каждый кадр (~15% CPU)
     dim_inactive   = true,
     terminal       = "kitty",
     browser        = "firefox",
@@ -156,11 +156,12 @@ hl.config({
     binds = { workspace_back_and_forth = true },
 })
 
--- NVIDIA: программный курсор, если аппаратный глючит
+-- NVIDIA: аппаратный курсор, если драйвер его поддерживает (2 = авто).
+-- Принудительный программный курсор (1) мешает direct scanout в играх.
 local nv = io.open("/proc/driver/nvidia/version", "r")
 if nv then
     nv:close()
-    hl.config({ cursor = { no_hardware_cursors = 1 } })
+    hl.config({ cursor = { no_hardware_cursors = 2 } })
     hl.env("LIBVA_DRIVER_NAME", "nvidia")
     hl.env("__GLX_VENDOR_LIBRARY_NAME", "nvidia")
     hl.env("NVD_BACKEND", "direct")

@@ -149,7 +149,7 @@ DEFAULTS = {
     "gaps_out": 8,
     "border_size": 1,
     "animations": True,
-    "border_anim": True,
+    "border_anim": False,
     "dim_inactive": True,
     "terminal": "kitty",
     "browser": "firefox",
