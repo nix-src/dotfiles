@@ -51,8 +51,8 @@
         "escape": false,
         "tooltip": false,
         "on-click": "~/.config/hypr/scripts/ui player",
-        "on-click-right": "~/.config/hypr/scripts/media play-pause",
-        "on-click-middle": "~/.config/hypr/scripts/media next"
+        "on-click-right": "~/.config/hypr/scripts/ui play-pause",
+        "on-click-middle": "~/.config/hypr/scripts/ui next"
     },
 
     "cpu": {

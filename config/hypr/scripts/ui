@@ -1,22 +1,29 @@
 #!/usr/bin/env bash
-# Мгновенный вызов окон фонового процесса (scripts/player):
-#   ui player     показать/скрыть мини-плеер
-#   ui settings   открыть окно настроек
-# Если фоновый процесс не запущен — запускаем нужный скрипт напрямую.
+# Мгновенный вызов уже запущенных фоновых процессов — клик лишь посылает сигнал:
+#   ui player       показать/скрыть мини-плеер          (scripts/player)
+#   ui settings     открыть окно настроек               (scripts/player)
+#   ui play-pause   пауза/продолжить показанный трек    (scripts/media)
+#   ui next         следующий трек                      (scripts/media)
+# Если нужного процесса нет — запускаем скрипт напрямую (медленнее).
 dir="$HOME/.config/hypr/scripts"
-pidfile="${XDG_RUNTIME_DIR:-/tmp}/dotfiles-ui.pid"
+run="${XDG_RUNTIME_DIR:-/tmp}"
 
 case "${1:-}" in
-    player)   sig=USR1; fallback=("$dir/player" toggle) ;;
-    settings) sig=USR2; fallback=("$dir/settings" --standalone) ;;
-    *) echo "usage: ui player|settings" >&2; exit 1 ;;
+    player)     pidfile=$run/dotfiles-ui.pid;    owner=scripts/player; sig=USR1; fallback=("$dir/player" toggle) ;;
+    settings)   pidfile=$run/dotfiles-ui.pid;    owner=scripts/player; sig=USR2; fallback=("$dir/settings" --standalone) ;;
+    play-pause) pidfile=$run/dotfiles-media.pid; owner=scripts/media;  sig=USR1; fallback=("$dir/media" play-pause) ;;
+    next)       pidfile=$run/dotfiles-media.pid; owner=scripts/media;  sig=USR2; fallback=("$dir/media" next) ;;
+    *) echo "usage: ui player|settings|play-pause|next" >&2; exit 1 ;;
 esac
 
 if [[ -r $pidfile ]]; then
     pid="$(<"$pidfile")"
     # сигнал только нашему процессу: pid мог достаться другой программе
-    if [[ $pid =~ ^[0-9]+$ ]] && tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null | grep -q 'scripts/player'; then
-        exec kill -"$sig" "$pid"
+    if [[ $pid =~ ^[0-9]+$ ]] && [[ -r /proc/$pid/cmdline ]]; then
+        mapfile -d '' args < "/proc/$pid/cmdline"      # без tr/grep: ни одного лишнего процесса
+        if [[ "${args[*]}" == *"$owner"* ]]; then
+            kill -"$sig" "$pid" && exit 0
+        fi
     fi
 fi
 exec "${fallback[@]}"
