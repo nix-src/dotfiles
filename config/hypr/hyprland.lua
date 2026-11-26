@@ -358,6 +358,65 @@ hl.window_rule({
     idle_inhibit = "always",
 })
 
+-- Мышь в играх «как в Windows с raw input»: без ускорения и без системного
+-- множителя, чтобы сенса зависела только от DPI и sensitivity в игре.
+-- gamescope (и XWayland-игры) получают движения мыши уже после ускорения
+-- libinput, поэтому adaptive + sensitivity ≠ 0 ломает мышечную память.
+-- Включается сам, пока открыто окно игры (параметры запуска в Steam не нужны);
+-- вручную: hyprctl eval 'game_mode(true|false)'.
+function _G.game_mode(on)
+    if on then
+        hl.config({ input = { sensitivity = 0, accel_profile = "flat" } })
+    else
+        hl.config({ input = {
+            sensitivity   = S.sensitivity,
+            accel_profile = S.accel_flat and "flat" or "adaptive",
+        } })
+    end
+end
+
+-- Тот же список, что в правиле «games», но в виде проверки на Lua
+-- (game_classes из настроек — точные имена классов через |).
+local extra_games = {}
+for c in S.game_classes:gmatch("[^|]+") do extra_games[c] = true end
+local function is_game(w)
+    local c = w.class or ""
+    return c == "cs2" or c == "gamescope" or extra_games[c]
+        or c:match("^steam_app_%d+$") ~= nil or c:match("^.+%.exe$") ~= nil
+end
+
+local game_on   = nil
+local game_pids = {}    -- процессы, для которых уже запрошен gamemode
+local function game_refresh()
+    local any = false
+    for _, w in ipairs(hl.get_windows()) do
+        if w.mapped and is_game(w) then
+            any = true
+            -- gamemode без gamemoderun в параметрах запуска; -r переключает,
+            -- поэтому на каждый процесс — один раз (gamemode сам снимает
+            -- регистрацию, когда процесс завершится)
+            if w.pid and w.pid > 0 and not game_pids[w.pid] then
+                game_pids[w.pid] = true
+                hl.exec_cmd("command -v gamemoded >/dev/null && gamemoded -r" .. w.pid)
+            end
+        end
+    end
+    if any ~= game_on then
+        game_on = any
+        _G.game_mode(any)
+        if not any then game_pids = {} end
+    end
+end
+-- список окон обновляется чуть позже события — проверяем с задержкой
+local function game_soon()
+    hl.timer(game_refresh, { timeout = 100, type = "oneshot" })
+end
+for _, ev in ipairs({ "window.open", "window.close", "window.destroy", "window.class" }) do
+    hl.on(ev, game_soon)
+end
+-- перезагрузка конфига сбрасывает input к значениям из файла — применяем заново
+hl.on("config.reloaded", function() game_on = nil; game_soon() end)
+
 -- Видео в полноэкранном режиме тоже не даёт экрану гаснуть
 hl.window_rule({
     name         = "fullscreen-no-idle",

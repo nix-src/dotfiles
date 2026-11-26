@@ -131,8 +131,12 @@ waits for vsync by default — that is the extra input lag. The config fixes it 
 
 The installer enables `multilib`, installs the 32-bit driver for your GPU first (for GTX 9xx/10xx —
 `lib32-nvidia-580xx-utils`, so Steam does not pull a conflicting one), then Steam and gamemode, and
-adds you to the `gamemode` group. In Steam, set the game launch options to
-`gamemoderun %command%`. Tearing and extra game window classes can be changed in Settings → Games.
+adds you to the `gamemode` group. No Steam launch options are needed: while a game window is open,
+Hyprland enables gamemode for it and turns off mouse acceleration and the system speed multiplier
+(flat, sensitivity 0), so aim depends only on DPI and in-game settings, like raw input on Windows.
+Mouse settings are restored when the game closes. In CS2, use "Fullscreen Windowed" at the
+monitor's native resolution; avoid gamescope — tearing does not work with it.
+Tearing and extra game window classes can be changed in Settings → Games.
 To check that tearing works, run `hyprctl monitors` while playing: `activelyTearing: true`.
 
 ## Performance
