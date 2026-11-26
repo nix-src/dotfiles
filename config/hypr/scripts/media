@@ -4,10 +4,31 @@
 Работает на событиях libplayerctl (без опроса). Печатает JSON для waybar
 при каждом изменении. Когда ничего не играет и нет трека на паузе —
 печатает пустую строку, и waybar прячет модуль.
+
+    media              модуль для waybar (exec)
+    media play-pause   управлять тем плеером, что сейчас показан в модуле
+    media next | previous
+
+Показанный плеер записывается в $XDG_RUNTIME_DIR/dotfiles-media-player,
+чтобы клики по модулю не попадали в другой плеер (playerctl без -p берёт
+первый попавшийся).
 """
 import html
 import json
+import os
 import sys
+
+CURRENT = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "dotfiles-media-player")
+
+# Быстрый путь для кликов: без загрузки GObject
+if sys.argv[1:2] and sys.argv[1] in ("play-pause", "next", "previous"):
+    try:
+        with open(CURRENT) as f:
+            inst = f.read().strip()
+    except OSError:
+        inst = ""
+    cmd = ["playerctl", *(["-p", inst] if inst else []), sys.argv[1]]
+    os.execvp(cmd[0], cmd)
 
 import gi
 
@@ -18,11 +39,11 @@ PLAY, PAUSE = "\U000f040a", "\U000f03e4"
 MAX = 40
 
 
-def pick(manager):
-    """Активный плеер: сначала играющий, иначе на паузе."""
-    players = list(manager.props.players)
+def pick(players):
+    """Активный плеер: сначала играющий, иначе на паузе; из нескольких —
+    тот, что последним начал играть (players — список от старых к новым)."""
     for want in (Playerctl.PlaybackStatus.PLAYING, Playerctl.PlaybackStatus.PAUSED):
-        for p in players:
+        for p in reversed(players):
             try:
                 if p.props.playback_status == want and p.get_title():
                     return p
@@ -34,9 +55,13 @@ def pick(manager):
 class Module:
     def __init__(self):
         self.last = None
+        self.current = None
+        # Список плееров ведём сами (instance -> Player), а PlayerManager
+        # используем только для событий: его внутренний список ненадёжен.
+        self.players = {}
         self.manager = Playerctl.PlayerManager()
         self.manager.connect("name-appeared", lambda _m, name: self.add(name))
-        self.manager.connect("player-vanished", lambda *_: self.emit())
+        self.manager.connect("name-vanished", lambda _m, name: self.remove(name))
         for name in self.manager.props.player_names:
             self.add(name)
         self.emit()
@@ -44,17 +69,42 @@ class Module:
         GLib.timeout_add_seconds(3, lambda: self.emit() or True)
 
     def add(self, name):
+        key = name.instance
+        if key in self.players:
+            return
         try:
             player = Playerctl.Player.new_from_name(name)
         except GLib.Error:
             return
-        player.connect("playback-status", lambda *_: self.emit())
+        player.connect("playback-status", lambda pl, st: self.on_status(key, pl, st))
         player.connect("metadata", lambda *_: self.emit())
-        self.manager.manage_player(player)
+        self.players[key] = player
         self.emit()
 
+    def remove(self, name):
+        if self.players.pop(name.instance, None) is not None:
+            self.emit()
+
+    def on_status(self, key, player, status):
+        # начавший играть плеер — в конец списка (он «самый свежий»)
+        if status == Playerctl.PlaybackStatus.PLAYING and self.players.get(key) is player:
+            self.players[key] = self.players.pop(key)
+        self.emit()
+
+    def remember(self, p):
+        inst = (p.props.player_instance or p.props.player_name or "") if p is not None else ""
+        if inst != self.current:
+            self.current = inst
+            try:
+                with open(CURRENT + ".tmp", "w") as f:
+                    f.write(inst)
+                os.replace(CURRENT + ".tmp", CURRENT)
+            except OSError:
+                pass
+
     def render(self):
-        p = pick(self.manager)
+        p = pick(list(self.players.values()))
+        self.remember(p)
         if p is None:
             return {"text": "", "class": "idle"}
         try:

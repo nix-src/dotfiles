@@ -12,6 +12,14 @@ Layer-shell поверхность (не окно): не участвует в �
 или когда курсор уходит с панели. Плееры отслеживаются через libplayerctl
 (события, без опроса внешних программ). Фоновый процесс нужен, чтобы
 панель появлялась мгновенно: клик лишь посылает ему сигнал.
+
+Список плееров ведём сами (а не через PlayerManager.props.players): внутренний
+список libplayerctl при исчезновении плееров может «сломаться», и процесс
+зависал вместе с панелью. Команды плееру (пауза, перемотка) уходят по D-Bus
+асинхронно — медленный плеер (Chromium, Electron) больше не тормозит панель.
+Если главный цикл всё же зависнет, сторожевой таймер запишет стек в
+~/.cache/dotfiles/player-hang.log и завершит процесс: панель исчезнет,
+а следующий клик по треку запустит плеер заново.
 """
 import os
 import signal
@@ -47,6 +55,7 @@ if os.path.exists(_LS) and _LS not in os.environ.get("LD_PRELOAD", ""):
     os.environ["LD_PRELOAD"] = ":".join(x for x in (_LS, os.environ.get("LD_PRELOAD")) if x)
     os.execv(sys.executable, [sys.executable, *sys.argv])
 
+import faulthandler  # noqa: E402
 import hashlib  # noqa: E402
 import json  # noqa: E402
 import socket  # noqa: E402
@@ -85,6 +94,8 @@ PREV, PLAY, PAUSE, NEXT = "\U000f04ae", "\U000f040a", "\U000f03e4", "\U000f04ad"
 NOTE = "\U000f075a"
 WIDTH, COVER = 400, 96
 CACHE = os.path.join(os.path.expanduser("~/.cache"), "dotfiles", "covers")
+HANG_LOG = os.path.join(os.path.expanduser("~/.cache"), "dotfiles", "player-hang.log")
+WATCHDOG = 20   # секунд без отклика главного цикла — процесс считается зависшим
 
 CSS = """
 window.miniplayer { background-color: #0f0f0f; border: 1px solid #2a2a2a; }
@@ -108,10 +119,11 @@ scale slider { min-width: 10px; min-height: 10px; margin: -4px; background: #ede
 """
 
 
-def pick(manager):
-    """Активный плеер: сначала играющий, иначе на паузе."""
+def pick(players):
+    """Активный плеер: сначала играющий, иначе на паузе; из нескольких —
+    тот, что последним начал играть (players — список от старых к новым)."""
     for want in (Playerctl.PlaybackStatus.PLAYING, Playerctl.PlaybackStatus.PAUSED):
-        for p in manager.props.players:
+        for p in reversed(players):
             try:
                 if p.props.playback_status == want and p.get_title():
                     return p
@@ -125,6 +137,23 @@ def safe(fn, default=None):
         return fn()
     except GLib.Error:
         return default
+
+
+def mpris_call(player, method, args=None, fallback=None):
+    """Асинхронный вызов метода MPRIS: главный цикл не ждёт ответа плеера."""
+    try:
+        if player.props.source != Playerctl.Source.DBUS_SESSION:
+            raise GLib.Error("not a session bus player")
+        inst = player.props.player_instance or player.props.player_name
+        if not inst:
+            raise GLib.Error("unknown player")
+        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)   # общий, уже открытый
+        bus.call("org.mpris.MediaPlayer2." + inst,
+                 "/org/mpris/MediaPlayer2", "org.mpris.MediaPlayer2.Player", method,
+                 args, None, Gio.DBusCallFlags.NO_AUTO_START, 3000, None, None)
+    except GLib.Error:
+        if fallback:
+            safe(fallback)
 
 
 def fmt_time(sec):
@@ -209,10 +238,25 @@ class Popup(Gtk.ApplicationWindow):
 
         self.build()
 
-        self.manager = app.manager
+        self.app = app
+        self.closing = False
         self.tick_id = GLib.timeout_add(250, self.tick)
-        self.connect("destroy", lambda *_: GLib.source_remove(self.tick_id))
+        self.connect("destroy", self.on_destroy)
         self.update()
+
+    def on_destroy(self, *_):
+        for attr in ("tick_id", "seek_timer", "leave_timer"):
+            if getattr(self, attr):
+                GLib.source_remove(getattr(self, attr))
+                setattr(self, attr, 0)
+        self.player = None
+
+    def close_once(self):
+        """Закрыть панель (повторные вызовы и вызовы после уничтожения игнорируются)."""
+        if not self.closing:
+            self.closing = True
+            self.close()
+        return False
 
     # ------------------------------------------------------------ интерфейс
     def build(self):
@@ -254,10 +298,10 @@ class Popup(Gtk.ApplicationWindow):
         col.append(times)
 
         ctl = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6, halign=Gtk.Align.CENTER)
-        self.b_prev = self.button(PREV, lambda p: p.previous())
-        self.b_play = self.button(PLAY, lambda p: p.play_pause())
+        self.b_prev = self.button(PREV, lambda p: mpris_call(p, "Previous", fallback=p.previous))
+        self.b_play = self.button(PLAY, self.play_pause)
         self.b_play.add_css_class("main")
-        self.b_next = self.button(NEXT, lambda p: p.next())
+        self.b_next = self.button(NEXT, lambda p: mpris_call(p, "Next", fallback=p.next))
         for b in (self.b_prev, self.b_play, self.b_next):
             ctl.append(b)
         col.append(ctl)
@@ -280,13 +324,21 @@ class Popup(Gtk.ApplicationWindow):
         b.connect("clicked", lambda _b: self.player and safe(lambda: action(self.player)))
         return b
 
+    def play_pause(self, p):
+        mpris_call(p, "PlayPause", fallback=p.play_pause)
+        # иконку меняем сразу, не дожидаясь ответа плеера (событие придёт следом)
+        playing = safe(lambda: p.props.playback_status) == Playerctl.PlaybackStatus.PLAYING
+        self.b_play.set_label(PLAY if playing else PAUSE)
+
     # -------------------------------------------------------------- плееры
     def update(self):
-        self.player = pick(self.manager)
+        if self.closing:
+            return
+        self.player = pick(self.app.player_list())
         p = self.player
         if p is None:
             # нечего показывать — закрываемся
-            GLib.idle_add(self.close)
+            GLib.idle_add(self.close_once)
             return
         self.title.set_text(safe(p.get_title, "") or "")
         self.artist.set_text(" · ".join(x for x in (safe(p.get_artist, ""), safe(p.get_album, "")) if x))
@@ -309,10 +361,13 @@ class Popup(Gtk.ApplicationWindow):
 
     def tick(self):
         p = self.player
-        if p is not None:
-            pos = (safe(lambda: p.props.position, 0) or 0) / 1e6
+        if p is not None and not self.closing:
+            # позиция берётся из кэша libplayerctl (без запроса к плееру)
+            pos = max(0.0, (safe(lambda: p.props.position, 0) or 0) / 1e6)
+            if self.length:
+                pos = min(pos, self.length)
             if GLib.get_monotonic_time() > self.seek_until:
-                self.scale.set_value(min(pos, self.length) if self.length else 0)
+                self.scale.set_value(pos if self.length else 0)
                 self.pos_l.set_text(fmt_time(pos))
         return True
 
@@ -328,8 +383,17 @@ class Popup(Gtk.ApplicationWindow):
 
     def do_seek(self, value):
         self.seek_timer = 0
-        if self.player:
-            safe(lambda: self.player.set_position(int(value * 1e6)))
+        p = self.player
+        if p:
+            usec = int(value * 1e6)
+            track = safe(lambda: p.print_metadata_prop("mpris:trackid"), "") or ""
+            if track.startswith("/") and GLib.Variant.is_object_path(track):
+                mpris_call(p, "SetPosition", GLib.Variant("(ox)", (track, usec)),
+                           fallback=lambda: p.set_position(usec))
+            else:
+                safe(lambda: p.set_position(usec))
+            # ползунок держим на новом месте, пока плеер не подтвердит перемотку
+            self.seek_until = GLib.get_monotonic_time() + 1_000_000
         return False
 
     # -------------------------------------------------------------- обложка
@@ -359,10 +423,10 @@ class Popup(Gtk.ApplicationWindow):
     # ------------------------------------------------------------ закрытие
     def on_key(self, _ctl, keyval, _code, _state):
         if keyval == Gdk.KEY_Escape:
-            self.close()
+            self.close_once()
             return True
         if keyval == Gdk.KEY_space and self.player:
-            safe(self.player.play_pause)
+            self.play_pause(self.player)
             return True
         return False
 
@@ -377,8 +441,7 @@ class Popup(Gtk.ApplicationWindow):
 
     def close_from_timer(self):
         self.leave_timer = 0
-        self.close()
-        return False
+        return self.close_once()
 
 
 class App(Gtk.Application):
@@ -389,21 +452,42 @@ class App(Gtk.Application):
         self.art_cache = {}   # url -> Gdk.Texture (или None, если не загрузилась)
         # Одно подключение к плеерам на весь процесс: события приходят всегда,
         # а панель при открытии просто берёт готовое состояние.
+        # PlayerManager нужен только для событий появления/исчезновения имён;
+        # сами плееры храним в своём словаре (instance -> Player), порядок —
+        # от давно игравших к недавним.
+        self.players = {}
         self.manager = Playerctl.PlayerManager()
         self.manager.connect("name-appeared", lambda _m, name: self.watch(name))
-        self.manager.connect("player-vanished", lambda *_: self.changed())
+        self.manager.connect("name-vanished", lambda _m, name: self.unwatch(name))
         for name in self.manager.props.player_names:
             self.watch(name)
 
+    def player_list(self):
+        return list(self.players.values())
+
     def watch(self, name):
+        key = name.instance
+        if key in self.players:
+            return
         try:
             p = Playerctl.Player.new_from_name(name)
         except GLib.Error:
             return
-        p.connect("playback-status", lambda *_: self.changed())
+        p.connect("playback-status", lambda pl, status: self.on_status(key, pl, status))
         p.connect("metadata", lambda *_: self.changed())
         p.connect("seeked", lambda *_: self.popup and self.popup.tick())
-        self.manager.manage_player(p)
+        self.players[key] = p
+        self.changed()
+
+    def unwatch(self, name):
+        if self.players.pop(name.instance, None) is not None:
+            self.changed()
+
+    def on_status(self, key, player, status):
+        # начавший играть плеер — в конец списка (он «самый свежий»)
+        if status == Playerctl.PlaybackStatus.PLAYING and self.players.get(key) is player:
+            self.players[key] = self.players.pop(key)
+        self.changed()
 
     def changed(self):
         if self.popup is not None:
@@ -427,6 +511,7 @@ class App(Gtk.Application):
         self.hold()   # живём в фоне и без окон
         with open(PIDFILE, "w") as f:
             f.write(str(os.getpid()))
+        self.start_watchdog()
         GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, signal.SIGUSR1, self.toggle)
         GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, signal.SIGUSR2, self.open_settings)
         self.settings_ready = None
@@ -436,6 +521,25 @@ class App(Gtk.Application):
         for sig in (signal.SIGTERM, signal.SIGINT):
             GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, sig, self.quit_clean)
 
+    # ------------------------------------------------------- сторожевой таймер
+    # faulthandler работает в отдельном C-потоке и не нуждается в GIL, поэтому
+    # срабатывает, даже если главный поток застрял внутри C-библиотеки.
+    # Главный цикл каждые 2 с отодвигает срок; не успел за WATCHDOG секунд —
+    # стек пишется в HANG_LOG, процесс завершается (вместе с панелью).
+    def start_watchdog(self):
+        try:
+            os.makedirs(os.path.dirname(HANG_LOG), exist_ok=True)
+            self.hang_log = open(HANG_LOG, "a")
+        except OSError:
+            self.hang_log = sys.stderr
+        faulthandler.register(signal.SIGQUIT, file=self.hang_log, all_threads=True)
+        self.heartbeat()
+        GLib.timeout_add_seconds(2, self.heartbeat)
+
+    def heartbeat(self):
+        faulthandler.dump_traceback_later(WATCHDOG, exit=True, file=self.hang_log)
+        return True
+
     def do_activate(self):
         if self.show_on_start:
             self.show_on_start = False
@@ -443,8 +547,8 @@ class App(Gtk.Application):
 
     def toggle(self):
         if self.popup is not None:          # повторный клик по треку — закрыть
-            self.popup.close()
-        elif pick(self.manager) is not None:
+            self.popup.close_once()
+        elif pick(self.player_list()) is not None:
             self.popup = Popup(self)
             self.popup.connect("close-request", self.on_popup_closed)
             self.popup.present()
@@ -464,6 +568,8 @@ class App(Gtk.Application):
         return False
 
     def on_window_removed(self, _app, win):
+        if win is self.popup:               # панель уничтожена любым путём
+            self.popup = None
         mod = getattr(self, "settings_mod", None)
         if mod and isinstance(win, mod.SettingsWindow) and win is not self.settings_ready:
             GLib.timeout_add(300, self.prebuild_settings)
@@ -500,8 +606,10 @@ class App(Gtk.Application):
         win.present()
         return True
 
-    def on_popup_closed(self, _w):
-        self.popup = None
+    def on_popup_closed(self, w):
+        w.closing = True
+        if self.popup is w:
+            self.popup = None
         return False   # окно закрывается и уничтожается как обычно
 
     def quit_clean(self):
@@ -510,6 +618,7 @@ class App(Gtk.Application):
                 os.remove(PIDFILE)
         except OSError:
             pass
+        faulthandler.cancel_dump_traceback_later()
         self.quit()
         return False
 
