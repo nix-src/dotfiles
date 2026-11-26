@@ -43,7 +43,7 @@ Flags: `--links-only` (configs only), `--no-nvidia`, `--no-gaming` (skip Steam a
 | Terminal / shell | kitty / zsh + starship |
 | Editor | neovim (no plugins, `quiet` colorscheme) |
 | Files | thunar |
-| Network / audio | iwd + impala (or NetworkManager + nmtui) / pipewire + pavucontrol |
+| Network / audio | iwd + impala (or NetworkManager + nmtui) / pipewire + pavucontrol, mic noise suppression (RNNoise) |
 | Media | current track from any MPRIS player (browser, Spotify, mpv…) in the bar, hidden when nothing plays; click opens the mini player under the cursor (cover, seek, controls; closes when the mouse leaves, on Esc or a second click), right click play/pause, middle click next |
 | Clipboard / screenshots | cliphist / grim + slurp |
 

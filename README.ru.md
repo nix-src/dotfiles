@@ -44,7 +44,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/nix-src/dotfiles/main/instal
 | Терминал / shell | kitty / zsh + starship |
 | Редактор | neovim (без плагинов, тема `quiet`) |
 | Файлы | thunar |
-| Сеть / звук | iwd + impala (или NetworkManager + nmtui) / pipewire + pavucontrol |
+| Сеть / звук | iwd + impala (или NetworkManager + nmtui) / pipewire + pavucontrol, шумоподавление микрофона (RNNoise) |
 | Медиа | текущий трек из любого MPRIS-плеера (браузер, Spotify, mpv…) в панели, скрыт, когда ничего не играет; клик — мини-плеер под курсором (обложка, перемотка, кнопки; закрывается, когда уводишь мышь, по Esc или повторным кликом), ПКМ — пауза, средняя — следующий |
 | Буфер / скриншоты | cliphist / grim + slurp |
 
