@@ -63,6 +63,10 @@ EN = {
     'мышь': 'mouse',
     'Чувствительность': 'Sensitivity',
     'Без ускорения': 'No acceleration',
+    'Ускорение как в Windows': 'Windows-like acceleration',
+    'кривая «Повышенной точности» из Windows 10': 'Windows 10 "Enhance pointer precision" curve',
+    'Скорость (кривая Windows)': 'Speed (Windows curve)',
+    'множитель; чувствительность выше на эту кривую не влияет': 'multiplier; the sensitivity above does not affect this curve',
     'одинаковая скорость при любом движении': 'same speed for any movement',
     'Естественная прокрутка': 'Natural scrolling',
     'Внешний вид': 'Appearance',
@@ -128,6 +132,8 @@ DEFAULTS = {
     "kb_options": "grp:alt_shift_toggle",
     "sensitivity": 0.0,
     "accel_flat": False,
+    "accel_windows": True,
+    "accel_scale": 1.15,
     "natural_scroll": False,
     "repeat_rate": 35,
     "repeat_delay": 250,
@@ -418,6 +424,10 @@ class SettingsWindow(Gtk.ApplicationWindow):
         p.append(row(_("Чувствительность"), w["sensitivity"]))
         w["accel_flat"] = switch(s["accel_flat"])
         p.append(row(_("Без ускорения"), w["accel_flat"], _("одинаковая скорость при любом движении")))
+        w["accel_windows"] = switch(s["accel_windows"])
+        p.append(row(_("Ускорение как в Windows"), w["accel_windows"], _("кривая «Повышенной точности» из Windows 10")))
+        w["accel_scale"] = slider(0.5, 2, 0.05, s["accel_scale"])
+        p.append(row(_("Скорость (кривая Windows)"), w["accel_scale"], _("множитель; чувствительность выше на эту кривую не влияет")))
         w["natural_scroll"] = switch(s["natural_scroll"])
         p.append(row(_("Естественная прокрутка"), w["natural_scroll"]))
 
@@ -530,7 +540,8 @@ class SettingsWindow(Gtk.ApplicationWindow):
         for k in ("repeat_rate", "repeat_delay", "gaps_in", "gaps_out", "border_size"):
             s[k] = int(w[k].get_value())
         s["sensitivity"] = round(w["sensitivity"].get_value(), 2)
-        for k in ("accel_flat", "natural_scroll", "animations", "border_anim", "dim_inactive"):
+        s["accel_scale"] = round(w["accel_scale"].get_value(), 2)
+        for k in ("accel_flat", "accel_windows", "natural_scroll", "animations", "border_anim", "dim_inactive"):
             s[k] = w[k].get_active()
         for k in ("terminal", "browser", "files"):
             s[k] = w[k].get_text().strip() or DEFAULTS[k]

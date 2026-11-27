@@ -7,6 +7,8 @@ local S = {
     kb_options     = "grp:alt_shift_toggle",
     sensitivity    = 0,
     accel_flat     = false,
+    accel_windows  = true,
+    accel_scale    = 1.15,
     natural_scroll = false,
     repeat_rate    = 35,
     repeat_delay   = 250,
@@ -40,6 +42,31 @@ local mod         = "SUPER"
 
 -- Caps Lock выключается при нажатии (см. ~/.config/xkb/symbols/capsfix).
 -- Не добавляем, если Caps Lock занят переключением раскладки.
+-- Кривая ускорения как в Windows 10 («Повышенная точность установки указателя»,
+-- ползунок 6/11): SmoothMouseXCurve/YCurve, пересчитанные в custom-профиль libinput.
+-- accel_scale сдвигает всю кривую быстрее/медленнее.
+local function windows_accel(scale)
+    local X = { 0, 0.43, 1.25, 3.86, 40 }
+    local Y = { 0, 1.37, 5.30, 24.30, 568 }
+    local function curve(x)
+        for i = 2, #X do
+            if x <= X[i] then
+                return Y[i - 1] + (Y[i] - Y[i - 1]) * (x - X[i - 1]) / (X[i] - X[i - 1])
+            end
+        end
+        return Y[#Y]
+    end
+    local pts = {}
+    for c = 0, 30 do pts[#pts + 1] = string.format("%.3f", scale * curve(0.714 * c) / 4) end
+    return "custom 1 " .. table.concat(pts, " ")
+end
+
+local function accel_profile()
+    if S.accel_flat then return "flat" end
+    if S.accel_windows then return windows_accel(S.accel_scale) end
+    return "adaptive"
+end
+
 local kb_options = S.kb_options
 if not kb_options:find("grp:caps_toggle", 1, true) then
     kb_options = (kb_options ~= "" and kb_options .. "," or "") .. "capsfix:unlock_on_press"
@@ -127,7 +154,7 @@ hl.config({
         kb_options    = kb_options,
         follow_mouse  = 1,
         sensitivity   = S.sensitivity,
-        accel_profile = S.accel_flat and "flat" or "adaptive",
+        accel_profile = accel_profile(),
         natural_scroll = S.natural_scroll,
         repeat_rate   = S.repeat_rate,
         repeat_delay  = S.repeat_delay,
@@ -302,7 +329,7 @@ function _G.game_mode(on)
     else
         hl.config({ input = {
             sensitivity   = S.sensitivity,
-            accel_profile = S.accel_flat and "flat" or "adaptive",
+            accel_profile = accel_profile(),
         } })
     end
 end
