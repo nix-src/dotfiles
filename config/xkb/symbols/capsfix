@@ -1,0 +1,11 @@
+// Caps Lock выключается при нажатии, а не при отпускании (как в Windows).
+// По умолчанию xkb снимает Lock только на отпускании, из-за чего при быстром
+// наборе получается «HEllo». Нужен libxkbcommon >= 1.8 (unlockOnPress).
+partial modifier_keys
+xkb_symbols "unlock_on_press" {
+    key <CAPS> {
+        repeat = No,
+        symbols[1] = [ Caps_Lock ],
+        actions[1] = [ LockMods(modifiers = Lock, unlockOnPress = true) ]
+    };
+};

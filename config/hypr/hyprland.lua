@@ -38,6 +38,13 @@ local menu        = "fuzzel"
 local scripts     = os.getenv("HOME") .. "/.config/hypr/scripts"
 local mod         = "SUPER"
 
+-- Caps Lock выключается при нажатии (см. ~/.config/xkb/symbols/capsfix).
+-- Не добавляем, если Caps Lock занят переключением раскладки.
+local kb_options = S.kb_options
+if not kb_options:find("grp:caps_toggle", 1, true) then
+    kb_options = (kb_options ~= "" and kb_options .. "," or "") .. "capsfix:unlock_on_press"
+end
+
 hl.monitor({
     output   = "",
     mode     = "preferred",
@@ -117,7 +124,7 @@ hl.config({
 
     input = {
         kb_layout     = S.kb_layout,
-        kb_options    = S.kb_options,
+        kb_options    = kb_options,
         follow_mouse  = 1,
         sensitivity   = S.sensitivity,
         accel_profile = S.accel_flat and "flat" or "adaptive",
@@ -290,7 +297,8 @@ hl.window_rule({
 
 function _G.game_mode(on)
     if on then
-        hl.config({ input = { sensitivity = 0, accel_profile = "flat" } })
+        -- В играх только выключаем ускорение, чувствительность оставляем свою.
+        hl.config({ input = { sensitivity = S.sensitivity, accel_profile = "flat" } })
     else
         hl.config({ input = {
             sensitivity   = S.sensitivity,

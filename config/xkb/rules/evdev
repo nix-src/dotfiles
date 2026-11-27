@@ -1,0 +1,5 @@
+// Системные правила + своя опция capsfix:unlock_on_press (см. symbols/capsfix).
+! include %S/evdev
+
+! option = symbols
+  capsfix:unlock_on_press = +capsfix(unlock_on_press)
