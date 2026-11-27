@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+choice="$(cliphist list | fuzzel --dmenu --prompt 'clip › ' --width 70)" || exit 0
+[[ -n $choice ]] || exit 0
+cliphist decode <<<"$choice" | wl-copy

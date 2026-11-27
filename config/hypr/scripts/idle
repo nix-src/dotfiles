@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+cfg="$HOME/.config/dotfiles-local/hypridle.conf"
+
+pkill -x hypridle 2>/dev/null
+if [[ -f $cfg ]]; then
+    exec hypridle -c "$cfg"
+fi
+exec hypridle

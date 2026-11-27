@@ -1,0 +1,90 @@
+{
+    "include": ["~/.config/dotfiles-local/waybar-lang.jsonc"],
+
+    "layer": "top",
+    "position": "top",
+    "height": 30,
+    "spacing": 0,
+
+    "modules-left": ["hyprland/workspaces", "custom/canvas"],
+    "modules-center": ["clock"],
+    "modules-right": ["custom/media", "tray", "hyprland/language", "cpu", "memory", "pulseaudio", "battery", "custom/settings", "custom/power"],
+
+    "hyprland/workspaces": {
+        "format": "{id}",
+        "on-click": "activate",
+        "sort-by-number": true
+    },
+
+    "custom/canvas": {
+        "exec": "cat \"$XDG_RUNTIME_DIR/hypr-canvas-bar\" 2>/dev/null",
+        "interval": "once",
+        "signal": 8,
+        "tooltip": false
+    },
+
+    "hyprland/language": {
+        "format": "{short}",
+        "tooltip": false
+    },
+
+    "clock": {
+        "format": "{:%H:%M}",
+        "format-alt": "{:%a %d.%m.%Y  %H:%M}",
+        "tooltip-format": "<tt>{calendar}</tt>",
+        "calendar": {
+            "mode": "month",
+            "weeks-pos": "",
+            "format": {
+                "months": "<span color='#ededed'><b>{}</b></span>",
+                "weekdays": "<span color='#6b6b6b'>{}</span>",
+                "days": "<span color='#a0a0a0'>{}</span>",
+                "today": "<span color='#0c0c0c' background='#ededed'><b>{}</b></span>"
+            }
+        }
+    },
+
+    "custom/media": {
+        "exec": "~/.config/hypr/scripts/media",
+        "return-type": "json",
+        "escape": false,
+        "tooltip": false,
+        "on-click": "~/.config/hypr/scripts/ui player",
+        "on-click-right": "~/.config/hypr/scripts/ui play-pause",
+        "on-click-middle": "~/.config/hypr/scripts/ui next"
+    },
+
+    "cpu": {
+        "interval": 3
+    },
+
+    "memory": {
+        "tooltip-format": "{used:0.1f}G / {total:0.1f}G",
+        "interval": 5
+    },
+
+    "pulseaudio": {
+        "scroll-step": 5,
+        "on-click": "pavucontrol",
+        "on-click-right": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
+    },
+
+    "battery": {
+        "states": { "warning": 25, "critical": 10 }
+    },
+
+    "custom/settings": {
+        "format": "󰢻",
+        "on-click": "~/.config/hypr/scripts/ui settings"
+    },
+
+    "custom/power": {
+        "format": "󰐥",
+        "on-click": "~/.config/hypr/scripts/powermenu"
+    },
+
+    "tray": {
+        "icon-size": 14,
+        "spacing": 8
+    }
+}

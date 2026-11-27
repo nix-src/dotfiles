@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+dir="$HOME/.config/hypr/scripts"
+run="${XDG_RUNTIME_DIR:-/tmp}"
+
+case "${1:-}" in
+    player)     pidfile=$run/dotfiles-ui.pid;    owner=scripts/player; sig=USR1; fallback=("$dir/player" toggle) ;;
+    settings)   pidfile=$run/dotfiles-ui.pid;    owner=scripts/player; sig=USR2; fallback=("$dir/settings" --standalone) ;;
+    play-pause) pidfile=$run/dotfiles-media.pid; owner=scripts/media;  sig=USR1; fallback=("$dir/media" play-pause) ;;
+    next)       pidfile=$run/dotfiles-media.pid; owner=scripts/media;  sig=USR2; fallback=("$dir/media" next) ;;
+    *) echo "usage: ui player|settings|play-pause|next" >&2; exit 1 ;;
+esac
+
+if [[ -r $pidfile ]]; then
+    pid="$(<"$pidfile")"
+    if [[ $pid =~ ^[0-9]+$ ]] && [[ -r /proc/$pid/cmdline ]]; then
+        mapfile -d '' args < "/proc/$pid/cmdline"
+        if [[ "${args[*]}" == *"$owner"* ]]; then
+            kill -"$sig" "$pid" && exit 0
+        fi
+    fi
+fi
+exec "${fallback[@]}"

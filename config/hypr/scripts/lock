@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+if pgrep -x hypridle >/dev/null; then
+    exec loginctl lock-session
+fi
+pgrep -x hyprlock >/dev/null || exec hyprlock

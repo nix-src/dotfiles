@@ -1,0 +1,10 @@
+[SddmGreeterTheme]
+Name=Mono
+Description=Minimal monochrome theme matching the Hyprland setup
+Type=sddm-theme
+Version=1.0
+MainScript=Main.qml
+ConfigFile=theme.conf
+Theme-Id=mono
+Theme-API=2.0
+QtVersion=6

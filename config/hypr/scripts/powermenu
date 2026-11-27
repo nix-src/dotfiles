@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+if [[ "$("$HOME/.config/hypr/scripts/lang")" == ru ]]; then
+    labels=("блокировка" "сон" "перезагрузка" "выключение" "выход")
+    prompt="питание › "
+else
+    labels=("lock" "suspend" "reboot" "shutdown" "logout")
+    prompt="power › "
+fi
+icons=($'\U000f033e' $'\U000f04b2' $'\U000f0709' $'\U000f0425' $'\U000f0343')
+
+idx="$(for i in "${!labels[@]}"; do printf '%s  %s\n' "${icons[$i]}" "${labels[$i]}"; done \
+    | fuzzel --dmenu --index --prompt "$prompt" --lines 5 --width 24)" || exit 0
+
+case "$idx" in
+    0) exec "$HOME/.config/hypr/scripts/lock" ;;
+    1) systemctl suspend ;;
+    2) systemctl reboot ;;
+    3) systemctl poweroff ;;
+    4) if [[ -n ${UWSM_FINALIZE_VARNAMES:-} ]]; then uwsm stop; else hyprctl dispatch 'hl.dsp.exit()'; fi ;;
+esac

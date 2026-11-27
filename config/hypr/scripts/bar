@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+"$HOME/.config/hypr/scripts/lang" apply >/dev/null
+pkill -x waybar 2>/dev/null
+exec waybar

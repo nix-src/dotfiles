@@ -1,0 +1,622 @@
+#!/usr/bin/env python3
+import json
+import os
+import shutil
+import signal
+import subprocess
+import sys
+
+if __name__ == "__main__" and "--standalone" not in sys.argv:
+    try:
+        with open(os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "dotfiles-ui.pid")) as _f:
+            _pid = int(_f.read().strip())
+        with open(f"/proc/{_pid}/cmdline", "rb") as _f:
+            _ours = b"scripts/player" in _f.read()
+        if _ours:
+            os.kill(_pid, signal.SIGUSR2)
+            sys.exit(0)
+    except (OSError, ValueError):
+        pass
+
+import gi
+
+gi.require_version("Gtk", "4.0")
+gi.require_version("Gdk", "4.0")
+from gi.repository import Gdk, Gio, GLib, Gtk
+
+HOME = os.path.expanduser("~")
+LOCAL = os.path.join(HOME, ".config", "dotfiles-local")
+SCRIPTS = os.path.join(HOME, ".config", "hypr", "scripts")
+JSON_PATH = os.path.join(LOCAL, "settings.json")
+
+def detect_lang():
+    try:
+        out = subprocess.run([os.path.join(SCRIPTS, "lang")], capture_output=True, text=True, timeout=3)
+        return "ru" if out.stdout.strip() == "ru" else "en"
+    except (OSError, subprocess.TimeoutExpired):
+        return "ru" if os.environ.get("LANG", "").startswith("ru") else "en"
+
+
+LANG = detect_lang()
+
+EN = {
+    'анимированные': 'animated',
+    'статичные': 'static',
+    'нет (сплошной фон)': 'none (solid color)',
+    'Настройки': 'Settings',
+    'Экран': 'Display',
+    'Нет данных от Hyprland': 'No data from Hyprland',
+    'авто (preferred)': 'auto (preferred)',
+    'Разрешение и частота': 'Resolution and refresh rate',
+    'Масштаб': 'Scale',
+    'Позиция': 'Position',
+    'auto или XxY, например 1920x0': 'auto or XxY, e.g. 1920x0',
+    'Клавиатура и мышь': 'Keyboard and mouse',
+    'клавиатура': 'keyboard',
+    'Раскладки': 'Layouts',
+    'через запятую, например us,ru,ua': 'comma separated, e.g. us,ru,ua',
+    'Переключение раскладки': 'Layout switch',
+    'Скорость повтора клавиш': 'Key repeat rate',
+    'символов в секунду': 'characters per second',
+    'Задержка до повтора': 'Repeat delay',
+    'мс': 'ms',
+    'мышь': 'mouse',
+    'Чувствительность': 'Sensitivity',
+    'Без ускорения': 'No acceleration',
+    'одинаковая скорость при любом движении': 'same speed for any movement',
+    'Естественная прокрутка': 'Natural scrolling',
+    'Внешний вид': 'Appearance',
+    'Отступ между окнами': 'Gap between windows',
+    'Отступ от краёв экрана': 'Gap to screen edges',
+    'Толщина рамки': 'Border width',
+    'Анимации': 'Animations',
+    'Вращающаяся рамка активного окна': 'Rotating border on active window',
+    'Затемнять неактивные окна': 'Dim inactive windows',
+    'Обои': 'Wallpaper',
+    'Бесконечный холст': 'Infinite canvas',
+    'Разъезд окон': 'Window spread',
+    'насколько окна расходятся при входе в холст': 'how far windows move apart when entering the canvas',
+    'Масштаб окон': 'Window scale',
+    'размер окон после входа в холст': 'window size after entering the canvas',
+    'Запас за краем': 'Edge margin',
+    'насколько можно уехать за крайние окна (доля экрана)': 'how far you can pan past the outermost windows (fraction of screen)',
+    'Инерция': 'Inertia',
+    'больше — дольше докатывается': 'higher — glides longer',
+    'Питание': 'Power',
+    'Блокировка через': 'Lock after',
+    'минут бездействия, 0 — никогда': 'minutes of inactivity, 0 — never',
+    'Выключение экрана через': 'Screen off after',
+    'минут, 0 — никогда': 'minutes, 0 — never',
+    'Сон через': 'Suspend after',
+    'Приложения': 'Applications',
+    'Терминал': 'Terminal',
+    'Браузер': 'Browser',
+    'Файловый менеджер': 'File manager',
+    'Система': 'System',
+    'Звук': 'Sound',
+    'Сеть (Wi-Fi)': 'Network (Wi-Fi)',
+    'Обновить систему': 'Update system', "paru -Syu; read -p 'Enter — закрыть'": "paru -Syu; read -p 'Press Enter to close'", 'Папка dotfiles': 'Dotfiles folder',
+    'Перечитать Hyprland': 'Reload Hyprland',
+    'По умолчанию': 'Defaults',
+    'Применить': 'Apply',
+    'Ошибка в настройках — см. уведомление Hyprland': 'Settings error — see the Hyprland notification',
+    'Применено': 'Applied',
+    'Сбросить все настройки?': 'Reset all settings?',
+    'Будут восстановлены значения по умолчанию.': 'Default values will be restored.',
+    'Отмена': 'Cancel',
+    'Сбросить': 'Reset',
+    'Ошибка записи: ': 'Write error: ',
+    'Язык интерфейса': 'Interface language',
+    'Игры': 'Games',
+    'Мгновенный вывод кадров (tearing)': 'Instant frame output (tearing)',
+    'как полноэкранный режим в Windows: кадр уходит на экран без ожидания vsync, меньше задержка ввода': 'like exclusive fullscreen on Windows: frames go to the screen without waiting for vsync, lower input lag',
+    'Дополнительные игры': 'Extra games',
+    'классы окон через |, например minecraft|osu! (CS2, Steam/Proton и gamescope уже учтены)': 'window classes separated by |, e.g. minecraft|osu! (CS2, Steam/Proton and gamescope are already covered)',
+    'В Steam добавь в параметры запуска игры: gamemoderun %command%': 'In Steam, add to the game launch options: gamemoderun %command%',
+    'авто (по системе)': 'auto (system)',
+    'применится после перезапуска панели и окон': 'applies to the bar, menus and this window',
+}
+
+
+def _(text):
+    return text if LANG == "ru" else EN.get(text, text)
+
+
+DEFAULTS = {
+    "monitors": {},
+    "kb_layout": "us,ru",
+    "kb_options": "grp:alt_shift_toggle",
+    "sensitivity": 0.0,
+    "accel_flat": False,
+    "natural_scroll": False,
+    "repeat_rate": 35,
+    "repeat_delay": 250,
+    "gaps_in": 4,
+    "gaps_out": 8,
+    "border_size": 1,
+    "animations": True,
+    "border_anim": False,
+    "dim_inactive": True,
+    "terminal": "kitty",
+    "browser": "firefox",
+    "files": "thunar",
+    "canvas": {"spread": 1.35, "shrink": 0.82, "pad": 0.35, "friction": 0.94},
+    "wallpaper": "animated",
+    "idle": {"lock": 10, "screen_off": 15, "suspend": 0},
+    "lang": "auto",
+    "game_tearing": True,
+    "game_classes": "",
+}
+
+LAYOUT_SWITCH = [
+    ("Alt + Shift", "grp:alt_shift_toggle"),
+    ("Ctrl + Shift", "grp:ctrl_shift_toggle"),
+    ("Super + Space", "grp:win_space_toggle"),
+    ("Caps Lock", "grp:caps_toggle"),
+]
+LANGS = [("авто (по системе)", "auto"), ("English", "en"), ("Русский", "ru")]
+WALLPAPER = [("анимированные", "animated"), ("статичные", "static"), ("нет (сплошной фон)", "none")]
+
+CSS = """
+window { background: #0f0f0f; }
+.sidebar { background: #0b0b0b; border-right: 1px solid #1f1f1f; }
+stacksidebar row { padding: 10px 18px; }
+.page { padding: 24px 28px; }
+.title { font-size: 18px; font-weight: bold; color: #ededed; margin-bottom: 12px; }
+.section { color: #6b6b6b; font-size: 11px; margin-top: 14px; }
+.row { padding: 6px 0; border-bottom: 1px solid #191919; }
+.row label.name { color: #c8c8c8; }
+.row label.hint { color: #5a5a5a; font-size: 11px; }
+.footer { padding: 12px 20px; border-top: 1px solid #1f1f1f; background: #0b0b0b; }
+button.apply { background: #c8c8c8; color: #0b0b0b; }
+button.apply:hover { background: #ededed; }
+button.tool { padding: 10px 14px; }
+.tip { color: #8a8a8a; }
+switch { background: #262626; border: 1px solid #3a3a3a; }
+switch:checked { background: #c8c8c8; border-color: #c8c8c8; }
+switch slider { background: #8a8a8a; box-shadow: none; }
+switch:checked slider { background: #0b0b0b; }
+scale trough { background: #262626; }
+scale highlight { background: #c8c8c8; }
+scale slider { background: #ededed; box-shadow: none; }
+"""
+
+
+def deep_merge(base, over):
+    out = json.loads(json.dumps(base))
+    for k, v in (over or {}).items():
+        if isinstance(v, dict) and isinstance(out.get(k), dict):
+            out[k].update(v)
+        else:
+            out[k] = v
+    return out
+
+
+def load_settings():
+    try:
+        with open(JSON_PATH) as f:
+            return deep_merge(DEFAULTS, json.load(f))
+    except (OSError, ValueError):
+        return deep_merge(DEFAULTS, {})
+
+
+def lua_value(v, indent=1):
+    pad = "    " * indent
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, (int, float)):
+        return repr(round(v, 4)) if isinstance(v, float) else str(v)
+    if isinstance(v, str):
+        return json.dumps(v, ensure_ascii=False)
+    if isinstance(v, dict):
+        if not v:
+            return "{}"
+        items = []
+        for k, val in v.items():
+            key = k if k.isidentifier() else "[" + json.dumps(k) + "]"
+            items.append(f"{pad}{key} = {lua_value(val, indent + 1)},")
+        return "{\n" + "\n".join(items) + "\n" + "    " * (indent - 1) + "}"
+    raise TypeError(type(v))
+
+
+def write_files(s):
+    os.makedirs(LOCAL, exist_ok=True)
+    with open(JSON_PATH, "w") as f:
+        json.dump(s, f, indent=2, ensure_ascii=False)
+
+    lua = {k: v for k, v in s.items() if k not in ("wallpaper", "idle", "lang")}
+    with open(os.path.join(LOCAL, "settings.lua"), "w") as f:
+        f.write("-- Сгенерировано окном настроек. Правки вручную будут перезаписаны.\n")
+        f.write("return " + lua_value(lua) + "\n")
+
+    with open(os.path.join(LOCAL, "wallpaper"), "w") as f:
+        f.write(s["wallpaper"])
+
+    with open(os.path.join(LOCAL, "lang"), "w") as f:
+        f.write(s["lang"])
+
+    idle = s["idle"]
+    parts = [
+        "general {\n"
+        "    lock_cmd         = pidof hyprlock || hyprlock\n"
+        "    before_sleep_cmd = loginctl lock-session\n"
+        "    after_sleep_cmd  = hyprctl dispatch 'hl.dsp.dpms({action=\"on\"})'\n"
+        "}\n"
+    ]
+    if idle["lock"] > 0:
+        parts.append(f"listener {{\n    timeout    = {int(idle['lock'] * 60)}\n"
+                     "    on-timeout = loginctl lock-session\n}\n")
+    if idle["screen_off"] > 0:
+        parts.append(f"listener {{\n    timeout    = {int(idle['screen_off'] * 60)}\n"
+                     "    on-timeout = hyprctl dispatch 'hl.dsp.dpms({action=\"off\"})'\n"
+                     "    on-resume  = hyprctl dispatch 'hl.dsp.dpms({action=\"on\"})'\n}\n")
+    if idle["suspend"] > 0:
+        parts.append(f"listener {{\n    timeout    = {int(idle['suspend'] * 60)}\n"
+                     "    on-timeout = systemctl suspend\n}\n")
+    with open(os.path.join(LOCAL, "hypridle.conf"), "w") as f:
+        f.write("\n".join(parts))
+
+
+def spawn(*cmd):
+    subprocess.Popen(cmd, start_new_session=True,
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def network_tool():
+    active = subprocess.run(["systemctl", "is-active", "--quiet", "NetworkManager"]).returncode == 0
+    return "nmtui" if active and shutil.which("nmtui") else "impala"
+
+
+def launch(*cmd):
+    if os.environ.get("UWSM_FINALIZE_VARNAMES") and shutil.which("uwsm"):
+        cmd = ("uwsm", "app", "--", *cmd)
+    spawn(*cmd)
+
+
+def monitors():
+    try:
+        out = subprocess.run(["hyprctl", "monitors", "-j"], capture_output=True, text=True, timeout=3)
+        return json.loads(out.stdout)
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return []
+
+
+def row(name, widget, hint=None):
+    box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
+    box.add_css_class("row")
+    labels = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, hexpand=True, valign=Gtk.Align.CENTER)
+    lbl = Gtk.Label(label=name, xalign=0)
+    lbl.add_css_class("name")
+    labels.append(lbl)
+    if hint:
+        h = Gtk.Label(label=hint, xalign=0, wrap=True)
+        h.add_css_class("hint")
+        labels.append(h)
+    box.append(labels)
+    widget.set_valign(Gtk.Align.CENTER)
+    box.append(widget)
+    return box
+
+
+def section(text):
+    lbl = Gtk.Label(label=text.upper(), xalign=0)
+    lbl.add_css_class("section")
+    return lbl
+
+
+def spin(lo, hi, step, value, digits=0):
+    w = Gtk.SpinButton.new_with_range(lo, hi, step)
+    w.set_digits(digits)
+    w.set_value(value)
+    return w
+
+
+def slider(lo, hi, step, value, digits=2):
+    w = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, lo, hi, step)
+    w.set_digits(digits)
+    w.set_draw_value(True)
+    w.set_value(value)
+    w.set_size_request(240, -1)
+    return w
+
+
+def switch(value):
+    w = Gtk.Switch()
+    w.set_active(bool(value))
+    return w
+
+
+def entry(value, width=220):
+    w = Gtk.Entry(text=str(value))
+    w.set_size_request(width, -1)
+    return w
+
+
+def dropdown(options, current):
+    labels = [_(o[0]) for o in options]
+    w = Gtk.DropDown.new_from_strings(labels)
+    values = [o[1] for o in options]
+    w.set_selected(values.index(current) if current in values else 0)
+    w.values = values
+    return w
+
+
+def dd_value(w):
+    return w.values[w.get_selected()]
+
+
+class SettingsWindow(Gtk.ApplicationWindow):
+    def __init__(self, app):
+        super().__init__(application=app, title=_("Настройки"))
+        self.set_default_size(900, 620)
+        self.s = load_settings()
+        self.w = {}
+
+        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        body = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, vexpand=True)
+        self.stack = Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE, hexpand=True)
+        side = Gtk.StackSidebar(stack=self.stack)
+        side.add_css_class("sidebar")
+        side.set_size_request(190, -1)
+        body.append(side)
+        body.append(self.stack)
+        root.append(body)
+        root.append(self.footer())
+        self.set_child(root)
+        self.build()
+
+    def page(self, name, title):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        box.add_css_class("page")
+        t = Gtk.Label(label=title, xalign=0)
+        t.add_css_class("title")
+        box.append(t)
+        sc = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER, vexpand=True)
+        sc.set_child(box)
+        self.stack.add_titled(sc, name, title)
+        return box
+
+    def build(self):
+        s, w = self.s, self.w
+
+        p = self.page("display", _("Экран"))
+        self.mon = {}
+        mons = monitors()
+        if not mons:
+            p.append(Gtk.Label(label=_("Нет данных от Hyprland"), xalign=0))
+        for m in mons:
+            name = m["name"]
+            saved = s["monitors"].get(name, {})
+            modes = []
+            for mode in m.get("availableModes", []):
+                v = mode.removesuffix("Hz")
+                if v not in [x[1] for x in modes]:
+                    modes.append((mode, v))
+            modes.insert(0, (_("авто (preferred)"), "preferred"))
+            p.append(section(f"{name} — {m.get('description', '')}"))
+            mode_w = dropdown(modes, saved.get("mode", "preferred"))
+            scale_w = spin(0.5, 3, 0.25, float(saved.get("scale", m.get("scale", 1))), 2)
+            pos_w = entry(saved.get("position", "auto"), 140)
+            p.append(row(_("Разрешение и частота"), mode_w))
+            p.append(row(_("Масштаб"), scale_w))
+            p.append(row(_("Позиция"), pos_w, _("auto или XxY, например 1920x0")))
+            self.mon[name] = (mode_w, scale_w, pos_w)
+
+        p = self.page("input", _("Клавиатура и мышь"))
+        p.append(section(_("клавиатура")))
+        w["kb_layout"] = entry(s["kb_layout"])
+        p.append(row(_("Раскладки"), w["kb_layout"], _("через запятую, например us,ru,ua")))
+        sw = [o for o in s["kb_options"].split(",") if o.startswith("grp:")]
+        w["kb_switch"] = dropdown(LAYOUT_SWITCH, sw[0] if sw else "")
+        p.append(row(_("Переключение раскладки"), w["kb_switch"]))
+        w["repeat_rate"] = spin(10, 80, 1, s["repeat_rate"])
+        p.append(row(_("Скорость повтора клавиш"), w["repeat_rate"], _("символов в секунду")))
+        w["repeat_delay"] = spin(150, 800, 10, s["repeat_delay"])
+        p.append(row(_("Задержка до повтора"), w["repeat_delay"], _("мс")))
+        p.append(section(_("мышь")))
+        w["sensitivity"] = slider(-1, 1, 0.05, s["sensitivity"])
+        p.append(row(_("Чувствительность"), w["sensitivity"]))
+        w["accel_flat"] = switch(s["accel_flat"])
+        p.append(row(_("Без ускорения"), w["accel_flat"], _("одинаковая скорость при любом движении")))
+        w["natural_scroll"] = switch(s["natural_scroll"])
+        p.append(row(_("Естественная прокрутка"), w["natural_scroll"]))
+
+        p = self.page("look", _("Внешний вид"))
+        w["gaps_in"] = spin(0, 40, 1, s["gaps_in"])
+        p.append(row(_("Отступ между окнами"), w["gaps_in"]))
+        w["gaps_out"] = spin(0, 60, 1, s["gaps_out"])
+        p.append(row(_("Отступ от краёв экрана"), w["gaps_out"]))
+        w["border_size"] = spin(0, 6, 1, s["border_size"])
+        p.append(row(_("Толщина рамки"), w["border_size"]))
+        w["animations"] = switch(s["animations"])
+        p.append(row(_("Анимации"), w["animations"]))
+        w["border_anim"] = switch(s["border_anim"])
+        p.append(row(_("Вращающаяся рамка активного окна"), w["border_anim"]))
+        w["dim_inactive"] = switch(s["dim_inactive"])
+        p.append(row(_("Затемнять неактивные окна"), w["dim_inactive"]))
+        w["wallpaper"] = dropdown(WALLPAPER, s["wallpaper"])
+        p.append(row(_("Обои"), w["wallpaper"]))
+        w["lang"] = dropdown(LANGS, s["lang"])
+        p.append(row(_("Язык интерфейса"), w["lang"], _("применится после перезапуска панели и окон")))
+
+        c = s["canvas"]
+        p = self.page("canvas", _("Бесконечный холст"))
+        w["spread"] = slider(1.0, 2.5, 0.05, c["spread"])
+        p.append(row(_("Разъезд окон"), w["spread"], _("насколько окна расходятся при входе в холст")))
+        w["shrink"] = slider(0.4, 1.0, 0.02, c["shrink"])
+        p.append(row(_("Масштаб окон"), w["shrink"], _("размер окон после входа в холст")))
+        w["pad"] = slider(0.0, 1.5, 0.05, c["pad"])
+        p.append(row(_("Запас за краем"), w["pad"], _("насколько можно уехать за крайние окна (доля экрана)")))
+        w["friction"] = slider(0.80, 0.98, 0.01, c["friction"])
+        p.append(row(_("Инерция"), w["friction"], _("больше — дольше докатывается")))
+
+        p = self.page("games", _("Игры"))
+        w["game_tearing"] = switch(s["game_tearing"])
+        p.append(row(_("Мгновенный вывод кадров (tearing)"), w["game_tearing"],
+                     _("как полноэкранный режим в Windows: кадр уходит на экран без ожидания vsync, меньше задержка ввода")))
+        w["game_classes"] = entry(s["game_classes"])
+        p.append(row(_("Дополнительные игры"), w["game_classes"],
+                     _("классы окон через |, например minecraft|osu! (CS2, Steam/Proton и gamescope уже учтены)")))
+        tip = Gtk.Label(label=_("В Steam добавь в параметры запуска игры: gamemoderun %command%"), xalign=0, wrap=True)
+        tip.add_css_class("tip")
+        tip.set_margin_top(14)
+        p.append(tip)
+
+        i = s["idle"]
+        p = self.page("power", _("Питание"))
+        w["lock"] = spin(0, 240, 1, i["lock"])
+        p.append(row(_("Блокировка через"), w["lock"], _("минут бездействия, 0 — никогда")))
+        w["screen_off"] = spin(0, 240, 1, i["screen_off"])
+        p.append(row(_("Выключение экрана через"), w["screen_off"], _("минут, 0 — никогда")))
+        w["suspend"] = spin(0, 480, 5, i["suspend"])
+        p.append(row(_("Сон через"), w["suspend"], _("минут, 0 — никогда")))
+
+        p = self.page("apps", _("Приложения"))
+        w["terminal"] = entry(s["terminal"])
+        p.append(row(_("Терминал"), w["terminal"], "Super + Enter"))
+        w["browser"] = entry(s["browser"])
+        p.append(row(_("Браузер"), w["browser"], "Super + B"))
+        w["files"] = entry(s["files"])
+        p.append(row(_("Файловый менеджер"), w["files"], "Super + E"))
+
+        p = self.page("system", _("Система"))
+        grid = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, max_children_per_line=3,
+                           column_spacing=10, row_spacing=10, homogeneous=True)
+        term = s["terminal"]
+        tools = [
+            (_("Звук"), ["pavucontrol"]),
+            (_("Сеть (Wi-Fi)"), [term, "--class", "float", "-e", network_tool()]),
+            ("Bluetooth", [term, "--class", "float", "-e", "bluetoothctl"]),
+            (_("Обновить систему"), [term, "--class", "float", "-e", "sh", "-c", _("paru -Syu; read -p 'Enter — закрыть'")]),
+            (_("Папка dotfiles"), [s["files"], os.path.join(HOME, "dotfiles")]),
+            (_("Перечитать Hyprland"), ["hyprctl", "reload"]),
+        ]
+        for label, cmd in tools:
+            needed = cmd[4] if cmd[1:4] == ["--class", "float", "-e"] else cmd[0]
+            if not shutil.which(cmd[0]) or not shutil.which(needed):
+                continue
+            b = Gtk.Button(label=label)
+            b.add_css_class("tool")
+            b.connect("clicked", lambda _b, c=cmd: spawn(*c))
+            grid.append(b)
+        p.append(grid)
+
+    def footer(self):
+        bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        bar.add_css_class("footer")
+        self.status = Gtk.Label(label="", xalign=0, hexpand=True)
+        self.status.add_css_class("hint")
+        reset = Gtk.Button(label=_("По умолчанию"))
+        reset.connect("clicked", self.on_reset)
+        apply = Gtk.Button(label=_("Применить"))
+        apply.add_css_class("apply")
+        apply.connect("clicked", self.on_apply)
+        bar.append(self.status)
+        bar.append(reset)
+        bar.append(apply)
+        return bar
+
+    def collect(self):
+        w = self.w
+        s = deep_merge(DEFAULTS, {})
+        s["monitors"] = {}
+        for name, (mode_w, scale_w, pos_w) in self.mon.items():
+            mode, scale = dd_value(mode_w), round(scale_w.get_value(), 2)
+            pos = pos_w.get_text().strip() or "auto"
+            if mode != "preferred" or scale != 1 or pos != "auto":
+                s["monitors"][name] = {"mode": mode, "scale": scale, "position": pos}
+        s["kb_layout"] = w["kb_layout"].get_text().strip() or DEFAULTS["kb_layout"]
+        s["kb_options"] = dd_value(w["kb_switch"])
+        for k in ("repeat_rate", "repeat_delay", "gaps_in", "gaps_out", "border_size"):
+            s[k] = int(w[k].get_value())
+        s["sensitivity"] = round(w["sensitivity"].get_value(), 2)
+        for k in ("accel_flat", "natural_scroll", "animations", "border_anim", "dim_inactive"):
+            s[k] = w[k].get_active()
+        for k in ("terminal", "browser", "files"):
+            s[k] = w[k].get_text().strip() or DEFAULTS[k]
+        s["wallpaper"] = dd_value(w["wallpaper"])
+        s["lang"] = dd_value(w["lang"])
+        s["game_tearing"] = w["game_tearing"].get_active()
+        s["game_classes"] = w["game_classes"].get_text().strip().strip("|")
+        s["canvas"] = {k: round(w[k].get_value(), 2) for k in ("spread", "shrink", "pad", "friction")}
+        s["idle"] = {k: int(w[k].get_value()) for k in ("lock", "screen_off", "suspend")}
+        return s
+
+    def on_apply(self, _btn):
+        old = self.s
+        new = self.collect()
+        try:
+            write_files(new)
+        except OSError as e:
+            self.status.set_text(_("Ошибка записи: ") + str(e))
+            return
+        subprocess.run(["hyprctl", "reload"], capture_output=True)
+        if new["idle"] != old["idle"]:
+            launch(os.path.join(SCRIPTS, "idle"))
+        if new["wallpaper"] != old["wallpaper"]:
+            launch(os.path.join(SCRIPTS, "wallpaper"))
+        self.s = new
+        if new["lang"] != old["lang"]:
+            launch(os.path.join(SCRIPTS, "bar"))
+            global LANG
+            LANG = detect_lang()
+            self.rebuild()
+            return
+        errors = subprocess.run(["hyprctl", "configerrors"], capture_output=True, text=True).stdout.strip()
+        self.status.set_text(_("Ошибка в настройках — см. уведомление Hyprland") if errors else _("Применено"))
+        GLib.timeout_add_seconds(4, self.clear_status)
+
+    def clear_status(self):
+        if self.get_mapped():
+            self.status.set_text("")
+        return False
+
+    def on_reset(self, _btn):
+        dialog = Gtk.AlertDialog(message=_("Сбросить все настройки?"),
+                                 detail=_("Будут восстановлены значения по умолчанию."),
+                                 buttons=[_("Отмена"), _("Сбросить")], cancel_button=0, default_button=0)
+        dialog.choose(self, None, self._reset_done)
+
+    def _reset_done(self, dialog, result):
+        try:
+            if dialog.choose_finish(result) != 1:
+                return
+        except GLib.Error:
+            return
+        for name in ("settings.json", "settings.lua", "hypridle.conf", "wallpaper", "lang"):
+            try:
+                os.remove(os.path.join(LOCAL, name))
+            except FileNotFoundError:
+                pass
+        subprocess.run(["hyprctl", "reload"], capture_output=True)
+        launch(os.path.join(SCRIPTS, "idle"))
+        launch(os.path.join(SCRIPTS, "wallpaper"))
+        launch(os.path.join(SCRIPTS, "bar"))
+        global LANG
+        LANG = detect_lang()
+        self.rebuild()
+
+    def rebuild(self):
+        app = self.get_application()
+        self.destroy()
+        SettingsWindow(app).present()
+
+
+class App(Gtk.Application):
+    def __init__(self):
+        super().__init__(application_id="dotfiles.settings", flags=Gio.ApplicationFlags.DEFAULT_FLAGS)
+
+    def do_startup(self):
+        Gtk.Application.do_startup(self)
+        css = Gtk.CssProvider()
+        css.load_from_string(CSS)
+        Gtk.StyleContext.add_provider_for_display(
+            Gdk.Display.get_default(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+
+    def do_activate(self):
+        win = self.get_active_window() or SettingsWindow(self)
+        win.present()
+
+
+if __name__ == "__main__":
+    sys.exit(App().run(sys.argv))

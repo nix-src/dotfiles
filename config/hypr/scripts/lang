@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+local_dir="$HOME/.config/dotfiles-local"
+choice="$(cat "$local_dir/lang" 2>/dev/null || echo auto)"
+
+if [[ $choice != en && $choice != ru ]]; then
+    loc="${LC_ALL:-${LC_MESSAGES:-${LANG:-en_US.UTF-8}}}"
+    [[ $loc == ru* ]] && choice=ru || choice=en
+fi
+
+if [[ ${1:-} == apply ]]; then
+    mkdir -p "$local_dir"
+    cp "$HOME/.config/waybar/lang/$choice.jsonc" "$local_dir/waybar-lang.jsonc"
+fi
+
+echo "$choice"

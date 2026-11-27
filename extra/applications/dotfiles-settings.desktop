@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Settings
+Name[ru]=Настройки
+Comment=Desktop settings
+Exec=@SETTINGS@
+Icon=preferences-system
+Categories=Settings;
+Terminal=false

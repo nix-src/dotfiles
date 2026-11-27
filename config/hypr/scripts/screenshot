@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+dir="$(xdg-user-dir PICTURES 2>/dev/null || echo "$HOME/Pictures")/Screenshots"
+mkdir -p "$dir"
+file="$dir/$(date +%Y-%m-%d_%H-%M-%S).png"
+
+case "${1:-area}" in
+    area)
+        geom="$(slurp -b 0c0c0c99 -c 8a8a8aff -w 1)" || exit 0
+        grim -g "$geom" "$file"
+        ;;
+    screen)
+        grim "$file"
+        ;;
+    *)
+        echo "usage: screenshot area|screen" >&2
+        exit 1
+        ;;
+esac
+
+wl-copy --type image/png < "$file"
+if [[ "$("$HOME/.config/hypr/scripts/lang")" == ru ]]; then
+    notify-send -a screenshot -u low "Скриншот" "$(basename "$file") — скопирован в буфер"
+else
+    notify-send -a screenshot -u low "Screenshot" "$(basename "$file") — copied to clipboard"
+fi

@@ -1,0 +1,32 @@
+add_newline = false
+format = "$directory$git_branch$git_status$python$cmd_duration$line_break$character"
+
+[directory]
+style = "bold #c8c8c8"
+truncation_length = 3
+truncate_to_repo = true
+read_only = " ro"
+
+[git_branch]
+format = "[$branch]($style) "
+style = "#6b6b6b"
+
+[git_status]
+format = "([$all_status$ahead_behind]($style) )"
+style = "#8a8a8a"
+
+[python]
+format = "[$virtualenv]($style) "
+style = "#6b6b6b"
+detect_extensions = []
+detect_files = []
+
+[cmd_duration]
+min_time = 2000
+format = "[$duration]($style) "
+style = "#4f4f4f"
+
+[character]
+success_symbol = "[›](#ededed)"
+error_symbol = "[›](#b36b6b)"
+vimcmd_symbol = "[‹](#ededed)"
