@@ -100,13 +100,24 @@ stops the inertia.
 | Section | What you can change |
 |---|---|
 | Display | resolution and refresh rate, scale, position of each monitor |
-| Keyboard and mouse | layouts, layout switch, key repeat, sensitivity, acceleration, scrolling |
+| Keyboard and mouse | layouts, layout switch, Windows-like Caps Lock, key repeat, mouse acceleration (like Windows / adaptive / none) and its speed, sensitivity, scrolling |
 | Appearance | gaps, border, animations, rotating border, dimming, wallpaper mode, interface language |
-| Games | tearing (no vsync wait), extra game window classes |
+| Games | tearing (no vsync wait), raw-input mouse, extra game window classes |
 | Infinite canvas | window spread and scale, edge margin, inertia |
 | Power | lock, screen off and suspend on idle |
 | Applications | terminal, browser, file manager |
 | System | sound, Wi-Fi, Bluetooth, system update, dotfiles folder |
+
+### Windows habits
+
+- **Mouse.** By default the acceleration curve mimics Windows 10 "Enhance pointer precision"
+  (slider at 6/11). It will not always match exactly, since Windows does not know the mouse DPI:
+  if the pointer feels faster or slower, tune "Speed (like Windows)" (the author uses 1.15).
+  You can also pick libinput adaptive acceleration or no acceleration; the "Sensitivity" slider
+  applies to those.
+- **Caps Lock** turns off on press, like on Windows (Linux defaults to on release, which gives
+  "HEllo" when typing fast). Done with a custom xkb option in `config/xkb/`, needs
+  libxkbcommon ≥ 1.8. Not applied when Caps Lock is chosen as the layout switch.
 
 Values are stored in `~/.config/dotfiles-local/`, outside the repo, so every machine keeps its own.
 The "Defaults" button deletes it and restores the repository defaults.
@@ -134,6 +145,7 @@ The installer enables `multilib`, installs the 32-bit driver for your GPU first 
 adds you to the `gamemode` group. No Steam launch options are needed: while a game window is open,
 Hyprland enables gamemode for it and turns off mouse acceleration and the system speed multiplier
 (flat, sensitivity 0), so aim depends only on DPI and in-game settings, like raw input on Windows.
+Turn off "Raw-input mouse in games" to keep your own sensitivity (acceleration stays off).
 Mouse settings are restored when the game closes. In CS2, use "Fullscreen Windowed" at the
 monitor's native resolution; avoid gamescope — tearing does not work with it.
 Tearing and extra game window classes can be changed in Settings → Games.

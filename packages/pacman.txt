@@ -33,6 +33,7 @@ pipewire
 pipewire-pulse
 pipewire-alsa
 wireplumber
+rtkit
 noise-suppression-for-voice
 pavucontrol
 playerctl

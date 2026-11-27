@@ -6,9 +6,10 @@ local S = {
     kb_layout      = "us,ru",
     kb_options     = "grp:alt_shift_toggle",
     sensitivity    = 0,
-    accel_flat     = false,
-    accel_windows  = true,
-    accel_scale    = 1.15,
+    accel          = "windows",   -- windows | adaptive | flat
+    accel_scale    = 1.0,
+    caps_windows   = true,
+    game_raw_mouse = true,
     natural_scroll = false,
     repeat_rate    = 35,
     repeat_delay   = 250,
@@ -40,8 +41,6 @@ local menu        = "fuzzel"
 local scripts     = os.getenv("HOME") .. "/.config/hypr/scripts"
 local mod         = "SUPER"
 
--- Caps Lock выключается при нажатии (см. ~/.config/xkb/symbols/capsfix).
--- Не добавляем, если Caps Lock занят переключением раскладки.
 -- Кривая ускорения как в Windows 10 («Повышенная точность установки указателя»,
 -- ползунок 6/11): SmoothMouseXCurve/YCurve, пересчитанные в custom-профиль libinput.
 -- accel_scale сдвигает всю кривую быстрее/медленнее.
@@ -61,14 +60,19 @@ local function windows_accel(scale)
     return "custom 1 " .. table.concat(pts, " ")
 end
 
+-- Старые настройки: accel_flat = true означало «без ускорения».
+if S.accel_flat == true and S.accel == "windows" then S.accel = "flat" end
+
 local function accel_profile()
-    if S.accel_flat then return "flat" end
-    if S.accel_windows then return windows_accel(S.accel_scale) end
-    return "adaptive"
+    if S.accel == "flat" then return "flat" end
+    if S.accel == "adaptive" then return "adaptive" end
+    return windows_accel(S.accel_scale)
 end
 
+-- Caps Lock выключается при нажатии, как в Windows (см. ~/.config/xkb/symbols/capsfix).
+-- Не добавляем, если Caps Lock занят переключением раскладки.
 local kb_options = S.kb_options
-if not kb_options:find("grp:caps_toggle", 1, true) then
+if S.caps_windows and not kb_options:find("grp:caps_toggle", 1, true) then
     kb_options = (kb_options ~= "" and kb_options .. "," or "") .. "capsfix:unlock_on_press"
 end
 
@@ -324,8 +328,12 @@ hl.window_rule({
 
 function _G.game_mode(on)
     if on then
-        -- В играх только выключаем ускорение, чувствительность оставляем свою.
-        hl.config({ input = { sensitivity = S.sensitivity, accel_profile = "flat" } })
+        -- В играх выключаем ускорение. game_raw_mouse: ещё и множитель 1:1, как raw input
+        -- в Windows; иначе остаётся своя чувствительность.
+        hl.config({ input = {
+            sensitivity   = S.game_raw_mouse and 0 or S.sensitivity,
+            accel_profile = "flat",
+        } })
     else
         hl.config({ input = {
             sensitivity   = S.sensitivity,
