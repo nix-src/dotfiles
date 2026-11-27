@@ -1,5 +1,3 @@
-// Минималистичная монохромная тема SDDM (Qt6).
-// Enter — войти, F2 / клик по строке сессии — сменить сессию.
 import QtQuick 2.15
 
 Rectangle {
@@ -16,13 +14,13 @@ Rectangle {
     readonly property color danger: "#b36b6b"
     readonly property string fontName: config.font || "monospace"
 
-    // Язык по системной локали: русский для ru_*, иначе английский
-    readonly property bool ru: Qt.locale().name.indexOf("ru") === 0
+    readonly property string lang: config.lang || "en"
+    readonly property bool ru: lang === "ru" || (lang === "auto" && Qt.locale().name.indexOf("ru") === 0)
+    readonly property var loc: Qt.locale(ru ? "ru_RU" : "en_US")
     function tr(en, ruText) { return root.ru ? ruText : en }
 
     property int sessionIndex: sessionModel.lastIndex >= 0 ? sessionModel.lastIndex : 0
 
-    // Выбранная учётная запись (по умолчанию — последний вошедший пользователь)
     property string selectedUser: userModel.lastUser
 
     function doLogin() {
@@ -31,7 +29,6 @@ Rectangle {
         sddm.login(name, password.text, root.sessionIndex)
     }
 
-    // Стрелки вверх/вниз в поле пароля — соседняя учётная запись
     function stepUser(delta) {
         var n = userNames.count
         if (n < 2) return
@@ -48,7 +45,6 @@ Rectangle {
         return it ? it.sname : ""
     }
 
-    // Имена сессий и пользователей из моделей SDDM
     Repeater {
         id: sessionNames
         model: sessionModel
@@ -80,7 +76,6 @@ Rectangle {
         visible: status === Image.Ready
     }
 
-    // ---------------------------------------------------------------- центр
     Column {
         anchors.centerIn: parent
         anchors.verticalCenterOffset: -40
@@ -101,12 +96,11 @@ Rectangle {
             color: root.muted
             font.family: root.fontName
             font.pixelSize: 15
-            text: Qt.locale().toString(new Date(), "dddd, d MMMM")
+            text: root.loc.toString(new Date(), "dddd, d MMMM")
         }
 
         Item { width: 1; height: 26 }
 
-        // учётные записи: клик выбирает пользователя
         Column {
             anchors.horizontalCenter: parent.horizontalCenter
             spacing: 6
@@ -120,7 +114,7 @@ Rectangle {
                     border.width: 1
                     border.color: selected ? root.muted : root.dim
 
-                    Rectangle {          // метка выбранной записи
+                    Rectangle {
                         width: 3; height: parent.height - 2
                         x: 1; y: 1
                         color: root.bright
@@ -165,7 +159,6 @@ Rectangle {
             }
         }
 
-        // запасной вариант: SDDM не отдал список пользователей — вводим имя вручную
         Rectangle {
             visible: userNames.count === 0
             width: 300; height: 38
@@ -201,7 +194,6 @@ Rectangle {
 
         Item { width: 1; height: 4 }
 
-        // пароль
         Rectangle {
             width: 300; height: 38
             anchors.horizontalCenter: parent.horizontalCenter
@@ -250,7 +242,6 @@ Rectangle {
         }
     }
 
-    // ------------------------------------------------------- низ: сессия
     Text {
         id: session
         anchors.left: parent.left
@@ -270,7 +261,6 @@ Rectangle {
         }
     }
 
-    // ------------------------------------------------ низ: питание
     Row {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
@@ -304,7 +294,7 @@ Rectangle {
         interval: 1000; running: true; repeat: true
         onTriggered: {
             clock.text = Qt.formatTime(new Date(), "HH:mm")
-            date.text = Qt.locale().toString(new Date(), "dddd, d MMMM")
+            date.text = root.loc.toString(new Date(), "dddd, d MMMM")
         }
     }
 

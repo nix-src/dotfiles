@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Заблокировать экран. Обычно через hypridle (loginctl lock-session → hyprlock),
-# а если hypridle не запущен — запускаем hyprlock напрямую.
 if pgrep -x hypridle >/dev/null; then
     exec loginctl lock-session
 fi

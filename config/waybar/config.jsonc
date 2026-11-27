@@ -1,5 +1,4 @@
 {
-    // Подписи модулей на нужном языке подключает scripts/bar (из lang/en.jsonc или lang/ru.jsonc)
     "include": ["~/.config/dotfiles-local/waybar-lang.jsonc"],
 
     "layer": "top",

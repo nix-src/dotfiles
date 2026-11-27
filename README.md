@@ -150,8 +150,13 @@ To check that tearing works, run `hyprctl monitors` while playing: `activelyTear
 ## Language
 
 The interface (bar, power menu, notifications, settings window, login screen, installer) is
-available in English and Russian. The language follows the system locale (`LANG`) and can be
-set manually in the settings window (Appearance → Interface language).
+available in English and Russian. English is the default; switch it in the settings window
+(Appearance → Interface language), in `lang=` of the SDDM `theme.conf`, or run the installer
+with `DOTFILES_LANG=ru`.
+
+All of the environment (terminal, bar, launcher, notifications, GTK/Qt apps, lock and login
+screens) uses one font: JetBrainsMono Nerd Font; `~/.config/fontconfig/fonts.conf` maps
+sans-serif, serif and monospace to it.
 
 ## Making changes
 

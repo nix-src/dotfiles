@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Запуск waybar с подписями на языке интерфейса
 "$HOME/.config/hypr/scripts/lang" apply >/dev/null
 pkill -x waybar 2>/dev/null
 exec waybar

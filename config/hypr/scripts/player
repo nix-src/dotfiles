@@ -1,26 +1,4 @@
 #!/usr/bin/env python3
-"""Мини-плеер — всплывающая панель под треком в waybar — и хост окна настроек.
-
-    player          фоновый процесс (запускается вместе с сессией)
-    player toggle   показать/скрыть панель (клик по треку в waybar)
-
-Тот же процесс открывает окно настроек по SIGUSR2 (scripts/settings шлёт
-его сам): GTK уже загружен, поэтому окно появляется мгновенно.
-
-Layer-shell поверхность (не окно): не участвует в тайлинге и фокусе,
-появляется под курсором. Закрывается повторным кликом по треку, Escape
-или когда курсор уходит с панели. Плееры отслеживаются через libplayerctl
-(события, без опроса внешних программ). Фоновый процесс нужен, чтобы
-панель появлялась мгновенно: клик лишь посылает ему сигнал.
-
-Список плееров ведём сами (а не через PlayerManager.props.players): внутренний
-список libplayerctl при исчезновении плееров может «сломаться», и процесс
-зависал вместе с панелью. Команды плееру (пауза, перемотка) уходят по D-Bus
-асинхронно — медленный плеер (Chromium, Electron) больше не тормозит панель.
-Если главный цикл всё же зависнет, сторожевой таймер запишет стек в
-~/.cache/dotfiles/player-hang.log и завершит процесс: панель исчезнет,
-а следующий клик по треку запустит плеер заново.
-"""
 import os
 import signal
 import sys
@@ -29,7 +7,6 @@ PIDFILE = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "dotfiles-ui.p
 
 
 def running_pid():
-    """pid живого фонового процесса (проверяем, что это именно он, а не чужой pid)."""
     try:
         with open(PIDFILE) as f:
             pid = int(f.read().strip())
@@ -41,37 +18,33 @@ def running_pid():
         return None
 
 
-# Быстрый путь для клика: без загрузки GTK, просто сигнал фоновому процессу
 if sys.argv[1:2] == ["toggle"]:
     pid = running_pid()
     if pid:
         os.kill(pid, signal.SIGUSR1)
         sys.exit(0)
-    sys.argv = [sys.argv[0], "--show"]   # фонового процесса нет — запускаемся и сразу показываем
+    sys.argv = [sys.argv[0], "--show"]
 
-# gtk4-layer-shell должен загрузиться раньше libwayland-client
 _LS = "/usr/lib/libgtk4-layer-shell.so"
 if os.path.exists(_LS) and _LS not in os.environ.get("LD_PRELOAD", ""):
     os.environ["LD_PRELOAD"] = ":".join(x for x in (_LS, os.environ.get("LD_PRELOAD")) if x)
     os.execv(sys.executable, [sys.executable, *sys.argv])
 
-import faulthandler  # noqa: E402
-import hashlib  # noqa: E402
-import json  # noqa: E402
-import socket  # noqa: E402
-import threading  # noqa: E402
-import urllib.request  # noqa: E402
+import faulthandler
+import hashlib
+import json
+import socket
+import threading
+import urllib.request
 
-import gi  # noqa: E402
+import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Gdk", "4.0")
 gi.require_version("GdkPixbuf", "2.0")
 gi.require_version("Playerctl", "2.0")
-from gi.repository import Gdk, GdkPixbuf, Gio, GLib, Gtk, Pango, Playerctl  # noqa: E402
+from gi.repository import Gdk, GdkPixbuf, Gio, GLib, Gtk, Pango, Playerctl
 
-# Библиотека layer-shell уже загружена; дочерним процессам (hyprctl, терминалы
-# из настроек и т.п.) она не нужна и только замедляет их запуск.
 _pre = [x for x in os.environ.get("LD_PRELOAD", "").split(":") if x and x != _LS]
 if _pre:
     os.environ["LD_PRELOAD"] = ":".join(_pre)
@@ -80,13 +53,13 @@ else:
 
 try:
     gi.require_version("GLibUnix", "2.0")
-    from gi.repository import GLibUnix  # noqa: E402
-except (ValueError, ImportError):     # старый GLib
+    from gi.repository import GLibUnix
+except (ValueError, ImportError):
     GLibUnix = type("GLibUnix", (), {"signal_add": staticmethod(GLib.unix_signal_add)})
 
 try:
     gi.require_version("Gtk4LayerShell", "1.0")
-    from gi.repository import Gtk4LayerShell as LayerShell  # noqa: E402
+    from gi.repository import Gtk4LayerShell as LayerShell
 except (ValueError, ImportError):
     LayerShell = None
 
@@ -95,7 +68,7 @@ NOTE = "\U000f075a"
 WIDTH, COVER = 400, 96
 CACHE = os.path.join(os.path.expanduser("~/.cache"), "dotfiles", "covers")
 HANG_LOG = os.path.join(os.path.expanduser("~/.cache"), "dotfiles", "player-hang.log")
-WATCHDOG = 20   # секунд без отклика главного цикла — процесс считается зависшим
+WATCHDOG = 20
 
 CSS = """
 window.miniplayer { background-color: #0f0f0f; border: 1px solid #2a2a2a; }
@@ -120,8 +93,6 @@ scale slider { min-width: 10px; min-height: 10px; margin: -4px; background: #ede
 
 
 def pick(players):
-    """Активный плеер: сначала играющий, иначе на паузе; из нескольких —
-    тот, что последним начал играть (players — список от старых к новым)."""
     for want in (Playerctl.PlaybackStatus.PLAYING, Playerctl.PlaybackStatus.PAUSED):
         for p in reversed(players):
             try:
@@ -140,14 +111,13 @@ def safe(fn, default=None):
 
 
 def mpris_call(player, method, args=None, fallback=None):
-    """Асинхронный вызов метода MPRIS: главный цикл не ждёт ответа плеера."""
     try:
         if player.props.source != Playerctl.Source.DBUS_SESSION:
             raise GLib.Error("not a session bus player")
         inst = player.props.player_instance or player.props.player_name
         if not inst:
             raise GLib.Error("unknown player")
-        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)   # общий, уже открытый
+        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
         bus.call("org.mpris.MediaPlayer2." + inst,
                  "/org/mpris/MediaPlayer2", "org.mpris.MediaPlayer2.Player", method,
                  args, None, Gio.DBusCallFlags.NO_AUTO_START, 3000, None, None)
@@ -162,7 +132,6 @@ def fmt_time(sec):
 
 
 def hypr(cmd):
-    """Запрос к Hyprland напрямую через его сокет (без запуска hyprctl)."""
     sock = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "hypr",
                         os.environ.get("HYPRLAND_INSTANCE_SIGNATURE", ""), ".socket.sock")
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
@@ -176,7 +145,6 @@ def hypr(cmd):
 
 
 def right_margin():
-    """Отступ справа, чтобы панель оказалась под курсором (в пределах монитора)."""
     try:
         cur = hypr("cursorpos")
         m = next(m for m in hypr("monitors") if m["focused"])
@@ -188,7 +156,6 @@ def right_margin():
 
 
 def load_art(url, px, done):
-    """Фоновый поток: скачать/прочитать обложку, обрезать до квадрата, вернуть PNG."""
     png = None
     try:
         if url.startswith("file://"):
@@ -220,7 +187,7 @@ class Popup(Gtk.ApplicationWindow):
         self.player = None
         self.art_url = None
         self.length = 0.0
-        self.seek_until = 0      # не обновлять ползунок, пока пользователь его тянет
+        self.seek_until = 0
         self.seek_timer = 0
         self.leave_timer = 0
 
@@ -231,7 +198,7 @@ class Popup(Gtk.ApplicationWindow):
             LayerShell.set_anchor(self, LayerShell.Edge.TOP, True)
             LayerShell.set_anchor(self, LayerShell.Edge.RIGHT, True)
             LayerShell.set_margin(self, LayerShell.Edge.TOP, 6)
-            LayerShell.set_margin(self, LayerShell.Edge.RIGHT, 8)   # точный — при показе
+            LayerShell.set_margin(self, LayerShell.Edge.RIGHT, 8)
             LayerShell.set_keyboard_mode(self, LayerShell.KeyboardMode.ON_DEMAND)
         else:
             self.set_decorated(False)
@@ -244,8 +211,6 @@ class Popup(Gtk.ApplicationWindow):
         self.connect("destroy", self.on_destroy)
 
     def prepare(self):
-        """Подготовить заранее, не показывая: поверхность, отрисовщик и шрифты.
-        Первый показ GTK-окна иначе стоит ~250 мс, подготовленного — ~20 мс."""
         self.realize()
         self.get_child().measure(Gtk.Orientation.HORIZONTAL, -1)
         return self
@@ -266,13 +231,11 @@ class Popup(Gtk.ApplicationWindow):
         self.player = None
 
     def close_once(self):
-        """Закрыть панель (повторные вызовы и вызовы после уничтожения игнорируются)."""
         if not self.closing:
             self.closing = True
             self.close()
         return False
 
-    # ------------------------------------------------------------ интерфейс
     def build(self):
         panel = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14)
         panel.add_css_class("panel")
@@ -340,18 +303,15 @@ class Popup(Gtk.ApplicationWindow):
 
     def play_pause(self, p):
         mpris_call(p, "PlayPause", fallback=p.play_pause)
-        # иконку меняем сразу, не дожидаясь ответа плеера (событие придёт следом)
         playing = safe(lambda: p.props.playback_status) == Playerctl.PlaybackStatus.PLAYING
         self.b_play.set_label(PLAY if playing else PAUSE)
 
-    # -------------------------------------------------------------- плееры
     def update(self):
         if self.closing:
             return
         self.player = pick(self.app.player_list())
         p = self.player
         if p is None:
-            # нечего показывать — закрываемся
             GLib.idle_add(self.close_once)
             return
         self.title.set_text(safe(p.get_title, "") or "")
@@ -376,7 +336,6 @@ class Popup(Gtk.ApplicationWindow):
     def tick(self):
         p = self.player
         if p is not None and not self.closing:
-            # позиция берётся из кэша libplayerctl (без запроса к плееру)
             pos = max(0.0, (safe(lambda: p.props.position, 0) or 0) / 1e6)
             if self.length:
                 pos = min(pos, self.length)
@@ -386,7 +345,6 @@ class Popup(Gtk.ApplicationWindow):
         return True
 
     def on_seek(self, _scale, _scroll, value):
-        # пока тянут ползунок — только показываем время, перематываем после паузы в движении
         value = max(0.0, min(value, self.length))
         self.seek_until = GLib.get_monotonic_time() + 600_000
         self.pos_l.set_text(fmt_time(value))
@@ -406,11 +364,9 @@ class Popup(Gtk.ApplicationWindow):
                            fallback=lambda: p.set_position(usec))
             else:
                 safe(lambda: p.set_position(usec))
-            # ползунок держим на новом месте, пока плеер не подтвердит перемотку
             self.seek_until = GLib.get_monotonic_time() + 1_000_000
         return False
 
-    # -------------------------------------------------------------- обложка
     def show_art(self, url):
         if url == self.art_url:
             return
@@ -434,7 +390,6 @@ class Popup(Gtk.ApplicationWindow):
             self.art.set_from_paintable(texture)
             self.cover.set_visible_child_name("art")
 
-    # ------------------------------------------------------------ закрытие
     def on_key(self, _ctl, keyval, _code, _state):
         if keyval == Gdk.KEY_Escape:
             self.close_once()
@@ -463,12 +418,7 @@ class App(Gtk.Application):
         super().__init__(application_id="dotfiles.shell", flags=Gio.ApplicationFlags.NON_UNIQUE)
         self.show_on_start = show
         self.popup = None
-        self.art_cache = {}   # url -> Gdk.Texture (или None, если не загрузилась)
-        # Одно подключение к плеерам на весь процесс: события приходят всегда,
-        # а панель при открытии просто берёт готовое состояние.
-        # PlayerManager нужен только для событий появления/исчезновения имён;
-        # сами плееры храним в своём словаре (instance -> Player), порядок —
-        # от давно игравших к недавним.
+        self.art_cache = {}
         self.players = {}
         self.manager = Playerctl.PlayerManager()
         self.manager.connect("name-appeared", lambda _m, name: self.watch(name))
@@ -498,7 +448,6 @@ class App(Gtk.Application):
             self.changed()
 
     def on_status(self, key, player, status):
-        # начавший играть плеер — в конец списка (он «самый свежий»)
         if status == Playerctl.PlaybackStatus.PLAYING and self.players.get(key) is player:
             self.players[key] = self.players.pop(key)
         self.changed()
@@ -522,7 +471,7 @@ class App(Gtk.Application):
         css.load_from_string(CSS)
         Gtk.StyleContext.add_provider_for_display(
             Gdk.Display.get_default(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
-        self.hold()   # живём в фоне и без окон
+        self.hold()
         with open(PIDFILE, "w") as f:
             f.write(str(os.getpid()))
         self.start_watchdog()
@@ -532,16 +481,11 @@ class App(Gtk.Application):
         self.settings_lang = None
         self.connect("window-removed", self.on_window_removed)
         self.popup_ready = None
-        GLib.timeout_add(800, self.prebuild_popup)       # заранее, чтобы первое открытие было мгновенным
+        GLib.timeout_add(800, self.prebuild_popup)
         GLib.timeout_add(1500, self.prebuild_settings)
         for sig in (signal.SIGTERM, signal.SIGINT):
             GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, sig, self.quit_clean)
 
-    # ------------------------------------------------------- сторожевой таймер
-    # faulthandler работает в отдельном C-потоке и не нуждается в GIL, поэтому
-    # срабатывает, даже если главный поток застрял внутри C-библиотеки.
-    # Главный цикл каждые 2 с отодвигает срок; не успел за WATCHDOG секунд —
-    # стек пишется в HANG_LOG, процесс завершается (вместе с панелью).
     def start_watchdog(self):
         try:
             os.makedirs(os.path.dirname(HANG_LOG), exist_ok=True)
@@ -562,37 +506,33 @@ class App(Gtk.Application):
             self.toggle()
 
     def toggle(self):
-        if self.popup is not None:          # повторный клик по треку — закрыть
+        if self.popup is not None:
             self.popup.close_once()
         elif pick(self.player_list()) is not None:
             win, self.popup_ready = self.popup_ready, None
             self.popup = win or Popup(self)
             self.popup.connect("close-request", self.on_popup_closed)
             self.popup.show_popup()
-            GLib.timeout_add(500, self.prebuild_popup)   # следующая — тоже заранее
+            GLib.timeout_add(500, self.prebuild_popup)
         return True
 
-    # Панель, как и окно настроек, строится заранее и ждёт скрытой.
     def prebuild_popup(self):
         if self.popup_ready is None:
             self.popup_ready = Popup(self).prepare()
         return False
 
-    # ------------------------------------------------------------ настройки
-    # Окно настроек строится заранее и ждёт скрытым: по клику его остаётся
-    # только показать. После закрытия готовится новое (со свежими значениями).
     def prebuild_settings(self):
         self.load_settings()
         mod = self.settings_mod
         if self.settings_ready is None and not any(isinstance(w, mod.SettingsWindow) for w in self.get_windows()):
             mod.LANG = mod.detect_lang()
             self.settings_ready = mod.SettingsWindow(self)
-            self.settings_ready.realize()     # поверхность и отрисовщик готовятся заранее
+            self.settings_ready.realize()
             self.settings_lang = mod.LANG
         return False
 
     def on_window_removed(self, _app, win):
-        if win is self.popup:               # панель уничтожена любым путём
+        if win is self.popup:
             self.popup = None
         if win is self.popup_ready:
             self.popup_ready = None
@@ -619,12 +559,12 @@ class App(Gtk.Application):
     def open_settings(self):
         self.load_settings()
         mod = self.settings_mod
-        for w in self.get_windows():          # уже открыто — просто поднять
+        for w in self.get_windows():
             if isinstance(w, mod.SettingsWindow) and w is not self.settings_ready:
                 w.present()
                 return True
         win, self.settings_ready = self.settings_ready, None
-        if win is None or mod.detect_lang() != self.settings_lang:   # язык сменился — пересобрать
+        if win is None or mod.detect_lang() != self.settings_lang:
             if win is not None:
                 win.destroy()
             mod.LANG = mod.detect_lang()
@@ -636,7 +576,7 @@ class App(Gtk.Application):
         w.closing = True
         if self.popup is w:
             self.popup = None
-        return False   # окно закрывается и уничтожается как обычно
+        return False
 
     def quit_clean(self):
         try:
@@ -651,5 +591,5 @@ class App(Gtk.Application):
 
 if __name__ == "__main__":
     if running_pid() and "--show" not in sys.argv:
-        sys.exit(0)   # уже запущен
+        sys.exit(0)
     sys.exit(App("--show" in sys.argv).run([sys.argv[0]]))

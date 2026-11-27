@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Меню питания (Super + Shift + Escape или кнопка ⏻ в панели)
 if [[ "$("$HOME/.config/hypr/scripts/lang")" == ru ]]; then
     labels=("блокировка" "сон" "перезагрузка" "выключение" "выход")
     prompt="питание › "

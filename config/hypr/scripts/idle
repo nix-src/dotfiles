@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# hypridle: таймауты из окна настроек, иначе — конфиг по умолчанию
 cfg="$HOME/.config/dotfiles-local/hypridle.conf"
 
 pkill -x hypridle 2>/dev/null

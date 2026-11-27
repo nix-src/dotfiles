@@ -1,11 +1,6 @@
 #!/usr/bin/env bash
-# Язык интерфейса: печатает "ru" или "en".
-#   ~/.config/dotfiles-local/lang = auto | en | ru  (выбирается в окне настроек)
-#   auto — по локали системы (LC_ALL / LC_MESSAGES / LANG)
-# "lang apply" дополнительно подключает подписи waybar на этом языке.
-
 local_dir="$HOME/.config/dotfiles-local"
-choice="$(cat "$local_dir/lang" 2>/dev/null || echo auto)"
+choice="$(cat "$local_dir/lang" 2>/dev/null || echo en)"
 
 if [[ $choice != en && $choice != ru ]]; then
     loc="${LC_ALL:-${LC_MESSAGES:-${LANG:-en_US.UTF-8}}}"

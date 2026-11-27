@@ -1,41 +1,23 @@
--- Бесконечный холст для рабочего стола.
---
---   Super + F                        тайлинг <-> холст (текущий рабочий стол)
---   ЛКМ по пустому месту (тянуть)    двигать холст, после отпускания — докатывается по инерции
---   Super + средняя кнопка (тянуть)  двигать холст, даже если курсор над окном
---   колесо по пустому месту          прокрутка холста (с Shift — по горизонтали)
---   Super + Alt + стрелки / HJKL     плавный сдвиг холста
---   Super + Alt + C                  плавно навести камеру на активное окно
---
--- Холст ограничен: экран не уезжает дальше крайних окон плюс запас PAD.
---
--- При входе в режим холста окна становятся плавающими, чуть уменьшаются и
--- «разъезжаются» от центра, освобождая пространство. Новые окна открываются
--- в центре экрана. Состояние переживает перезагрузку конфига.
-
 local M = {}
 
--- Значения по умолчанию; переопределяются через окно настроек (M.setup(mod, opts))
-local SPREAD   = 1.35   -- во сколько раз растянуть расстояния от центра при входе
-local SHRINK   = 0.82   -- масштаб окон при входе
-local PAD      = 0.35   -- насколько можно уехать за крайние окна (доля экрана)
-local STEP     = 400    -- шаг клавиатурного сдвига, px
-local SCROLL   = 90     -- шаг прокрутки колесом, px
-local FRICTION = 0.94   -- затухание инерции за тик
-local TICK     = 8      -- период таймера, мс
+local SPREAD   = 1.35
+local SHRINK   = 0.82
+local PAD      = 0.35
+local STEP     = 400
+local SCROLL   = 90
+local FRICTION = 0.94
+local TICK     = 8
 
 local runtime    = os.getenv("XDG_RUNTIME_DIR") or "/tmp"
 local state_file = runtime .. "/hypr-canvas"
 local bar_file   = runtime .. "/hypr-canvas-bar"
 
-local active = {}   -- [workspace id] = true
+local active = {}
 local pan = {
-    timer = nil, mode = nil,     -- nil | "drag" | "glide"
+    timer = nil, mode = nil,
     x = 0, y = 0, vx = 0, vy = 0,
     idle = 0,
 }
-
------------------------------------------------------------------- состояние --
 
 local function load_state()
     local f = io.open(state_file, "r")
@@ -54,8 +36,6 @@ local function save_state()
     f:close()
 end
 
--- Индикатор в waybar (модуль custom/canvas, сигнал 8). Обновляем, только
--- когда текст действительно изменился (не дёргаем waybar на каждом переключении).
 local bar_text = nil
 local function update_bar()
     local ws = hl.get_active_workspace()
@@ -69,8 +49,6 @@ local function update_bar()
     end
     hl.exec_cmd("pkill -RTMIN+8 waybar")
 end
-
-------------------------------------------------------------------- утилиты --
 
 local function sel(w) return "address:" .. w.address end
 
@@ -88,7 +66,6 @@ local function windows(ws)
     return out
 end
 
--- Рабочая область монитора без панелей
 local function usable(m)
     local r = type(m.reserved) == "table" and m.reserved or {}
     local top, bottom = r.top or 0, r.bottom or 0
@@ -111,8 +88,6 @@ local function over_empty_space()
     return true
 end
 
--- Границы холста: экран не может уехать дальше крайних окон плюс запас PAD.
--- Чем больше окон и чем шире они разложены, тем больше доступное поле.
 local function clamp(ws, dx, dy)
     local x1, y1, x2, y2
     for _, w in ipairs(windows(ws)) do
@@ -126,9 +101,6 @@ local function clamp(ws, dx, dy)
     if not x1 then return 0, 0 end
     local ux, uy, uw, uh = usable(hl.get_active_monitor())
 
-    -- Допустимый диапазон сдвига по оси: если содержимое (с запасом) шире экрана —
-    -- экран остаётся внутри него, если уже — содержимое остаётся внутри экрана.
-    -- Ноль всегда разрешён, чтобы не дёргать холст, уже стоящий за границей.
     local function axis(d, lo, hi, vlo, vlen, pad)
         local a, b = (vlo + vlen) - (hi + pad), vlo - (lo - pad)
         local min_d, max_d = math.min(a, b, 0), math.max(a, b, 0)
@@ -138,7 +110,6 @@ local function clamp(ws, dx, dy)
            math.floor(axis(dy, y1, y2, uy, uh, uh * PAD))
 end
 
--- Сдвинуть все окна холста; возвращает фактический сдвиг (с учётом границ)
 local function shift(ws, dx, dy)
     dx, dy = clamp(ws, dx, dy)
     if dx == 0 and dy == 0 then return 0, 0 end
@@ -158,8 +129,6 @@ local function set_move_anim(on)
     end
 end
 
------------------------------------------------------------------ переключение --
-
 function M.toggle()
     local ws = hl.get_active_workspace()
     if not ws or ws.special or not ws.id then return end
@@ -176,8 +145,6 @@ function M.toggle()
         local m = hl.get_active_monitor()
         local ux, uy, uw, uh = usable(m)
         local cx, cy = ux + uw / 2, uy + uh / 2
-        -- Сначала снимаем геометрию всех окон: свойства читаются «вживую»,
-        -- а после всплытия первого окна остальные перестраиваются.
         local plan = {}
         for _, w in ipairs(windows(ws)) do
             if not w.floating and (w.fullscreen or 0) == 0 then
@@ -191,7 +158,6 @@ function M.toggle()
                 })
             end
         end
-        -- окна разъезжаются от центра экрана и чуть уменьшаются
         for _, p in ipairs(plan) do
             hl.dispatch(hl.dsp.window.float({ action = "enable", window = p.sel }))
             hl.dispatch(hl.dsp.window.resize({ x = p.w, y = p.h, window = p.sel }))
@@ -205,8 +171,6 @@ function M.toggle()
 end
 
 function M.is_active(id) return active[id] == true end
-
-------------------------------------------------------------------- панорама --
 
 local function stop()
     if pan.timer then pan.timer:set_enabled(false) end
@@ -225,12 +189,10 @@ local function tick()
         local dx = math.floor(c.x - pan.x + 0.5)
         local dy = math.floor(c.y - pan.y + 0.5)
         pan.x, pan.y = pan.x + dx, pan.y + dy
-        -- сглаженная скорость для инерции
         pan.vx = pan.vx * 0.8 + dx * 0.2
         pan.vy = pan.vy * 0.8 + dy * 0.2
         if dx == 0 and dy == 0 then
             pan.idle = pan.idle + TICK
-            -- страховка: если отпускание кнопки потерялось
             if pan.idle > 1500 then return stop() end
         else
             pan.idle = 0
@@ -241,7 +203,6 @@ local function tick()
         local dx, dy = math.floor(pan.vx + 0.5), math.floor(pan.vy + 0.5)
         if math.abs(pan.vx) < 0.6 and math.abs(pan.vy) < 0.6 then return stop() end
         local ax, ay = shift(ws, dx, dy)
-        -- упёрлись в границу — гасим инерцию по этой оси
         if ax ~= dx then pan.vx = 0 end
         if ay ~= dy then pan.vy = 0 end
     else
@@ -271,13 +232,11 @@ local function release()
     end
 end
 
--- ЛКМ по пустому месту: клик всё равно проходит дальше (non_consuming)
 function M.press_empty()
     if pan.mode == "glide" then stop() end
     if over_empty_space() then start_drag() end
 end
 
--- Super + средняя кнопка: тянуть откуда угодно
 function M.press_any()
     if pan.mode == "glide" then stop() end
     if current() then start_drag() end
@@ -285,7 +244,6 @@ end
 
 M.release = release
 
--- Плавный сдвиг с анимацией окон
 function M.nudge(dx, dy)
     local ws = current()
     if ws then
@@ -298,7 +256,6 @@ function M.scroll(dx, dy)
     if over_empty_space() then M.nudge(dx, dy) end
 end
 
--- Навести камеру на активное окно
 function M.center()
     local ws = current()
     local w = hl.get_active_window()
@@ -309,8 +266,6 @@ function M.center()
               math.floor(uy + uh / 2 - (w.at.y + w.size.y / 2)))
 end
 
------------------------------------------------------------------- установка --
-
 function M.setup(mod, opts)
     opts = opts or {}
     SPREAD   = tonumber(opts.spread)   or SPREAD
@@ -319,7 +274,6 @@ function M.setup(mod, opts)
     FRICTION = tonumber(opts.friction) or FRICTION
     load_state()
 
-    -- Новые окна на холсте — плавающие, в центре экрана
     hl.on("window.open", function(w)
         if not w or not w.workspace or not w.workspace.id then return end
         if active[w.workspace.id] and not w.floating then

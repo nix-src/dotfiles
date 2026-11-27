@@ -1,4 +1,3 @@
--- Минимальный Neovim без плагинов
 vim.g.mapleader = " "
 
 local o = vim.opt
@@ -38,7 +37,6 @@ map("n", "<C-j>", "<C-w>j")
 map("n", "<C-k>", "<C-w>k")
 map("n", "<C-l>", "<C-w>l")
 
--- Подсветка скопированного текста
 vim.api.nvim_create_autocmd("TextYankPost", {
     callback = function() vim.hl.on_yank({ timeout = 150 }) end,
 })

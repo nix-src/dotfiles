@@ -1,6 +1,3 @@
-# Официальные репозитории Arch. Комментарии и пустые строки игнорируются.
-
-# Hyprland и экосистема
 hyprland
 uwsm
 xdg-desktop-portal-hyprland
@@ -13,13 +10,11 @@ sddm
 qt6-declarative
 qt6-svg
 
-# Панель, лаунчер, уведомления
 waybar
 fuzzel
 mako
 libnotify
 
-# Терминал и оболочка
 kitty
 zsh
 zsh-completions
@@ -34,7 +29,6 @@ ripgrep
 fd
 neovim
 
-# Звук
 pipewire
 pipewire-pulse
 pipewire-alsa
@@ -42,17 +36,14 @@ wireplumber
 pavucontrol
 playerctl
 
-# Сеть
 iwd
 impala
 
-# Скриншоты и буфер обмена
 grim
 slurp
 wl-clipboard
 cliphist
 
-# Файлы
 thunar
 gvfs
 tumbler
@@ -60,13 +51,11 @@ xdg-user-dirs
 unzip
 p7zip
 
-# Шрифты
 ttf-jetbrains-mono-nerd
 noto-fonts
 noto-fonts-cjk
 noto-fonts-emoji
 
-# Темы (GTK / Qt / иконки / курсор)
 adw-gtk-theme
 papirus-icon-theme
 adwaita-cursors
@@ -74,17 +63,14 @@ qt6ct
 qt5-wayland
 qt6-wayland
 
-# Окно настроек (GTK4 + Python)
 gtk4
 gtk4-layer-shell
 python-gobject
 
-# Обои (генерация и проигрывание)
 ffmpeg
 python
 mpv
 
-# Утилиты
 brightnessctl
 btop
 git

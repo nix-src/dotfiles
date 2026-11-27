@@ -1,5 +1,3 @@
-# Игры (ставятся, если не передан --no-gaming). 32-битный драйвер видеокарты
-# install.sh подбирает сам: NVIDIA 580xx / nvidia-utils / mesa.
 steam
 gamemode
 lib32-gamemode

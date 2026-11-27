@@ -1,10 +1,7 @@
 #!/usr/bin/env bash
-# Обои: animated (видео), static (кадр) или none (сплошной фон).
-# Режим выбирается в окне настроек и хранится в ~/.config/dotfiles-local/wallpaper.
 dir="$HOME/.local/share/wallpapers"
 mode="$(cat "$HOME/.config/dotfiles-local/wallpaper" 2>/dev/null || echo animated)"
 
-# замороженный (SIGSTOP) процесс получит SIGTERM только после SIGCONT
 pkill -x mpvpaper 2>/dev/null
 pkill -CONT -x mpvpaper 2>/dev/null
 command -v mpvpaper >/dev/null || exit 0
@@ -16,8 +13,6 @@ case "$mode" in
 esac
 [[ -f $file ]] || exit 0
 
-# -p: пауза, когда обои полностью закрыты; cache=no — файл крошечный, кэш mpv не нужен.
-# Когда обои закрыты окнами частично, процесс замораживает hyprland.lua (wallpaper_refresh).
 mpvpaper -p \
     -o "no-audio loop hwdec=auto panscan=1.0 image-display-duration=inf really-quiet cache=no demuxer-max-bytes=2MiB demuxer-max-back-bytes=1MiB" \
     '*' "$file" &

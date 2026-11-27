@@ -1,14 +1,4 @@
 #!/usr/bin/env python3
-"""Генератор минималистичных анимированных обоев.
-
-Сетка тусклых точек на почти чёрном фоне, по которой медленно дрейфуют два
-мягких «пятна света». Анимация зациклена без шва. Только stdlib + ffmpeg.
-
-    generate.py OUT_DIR [--size 1920x1080] [--fps 20] [--seconds 24]
-
-Создаёт OUT_DIR/drift.mp4 (видео для mpvpaper) и OUT_DIR/drift.png (кадр
-для экрана блокировки и SDDM).
-"""
 import argparse
 import math
 import os
@@ -16,10 +6,10 @@ import random
 import subprocess
 import sys
 
-BG = 11            # фон  (#0b0b0b)
-DOT = 34           # базовая яркость точки
-GLOW = 140          # прибавка яркости в центре пятна
-SPACING = 36       # шаг сетки, px
+BG = 11
+DOT = 34
+GLOW = 140
+SPACING = 36
 
 
 def main() -> int:
@@ -44,7 +34,6 @@ def main() -> int:
 
     def blobs(t: float):
         a = 2 * math.pi * t
-        # Лиссажу с целыми частотами -> бесшовная петля
         return (
             (w * (0.5 + 0.32 * math.cos(a)),        h * (0.5 + 0.30 * math.sin(2 * a))),
             (w * (0.5 + 0.30 * math.sin(a + 1.9)),  h * (0.5 + 0.28 * math.cos(a + 0.7))),

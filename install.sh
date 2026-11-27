@@ -1,14 +1,4 @@
 #!/usr/bin/env bash
-# Установка окружения Arch Linux + Hyprland одним скриптом.
-#
-#   bash <(curl -fsSL https://raw.githubusercontent.com/nix-src/dotfiles/main/install.sh)
-#
-# Флаги:
-#   --links-only   только связать конфиги и применить тему (без пакетов и sudo)
-#   --no-nvidia    не ставить драйвер NVIDIA, даже если карта найдена
-#   --no-gaming    не ставить Steam и 32-битные драйверы
-#   -h, --help     справка
-
 set -Eeuo pipefail
 
 REPO_URL="https://github.com/nix-src/dotfiles.git"
@@ -28,8 +18,7 @@ for arg in "$@"; do
     esac
 done
 
-# Язык сообщений по локали: t "english" "русский"
-case "${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}" in ru*) UI_RU=1 ;; *) UI_RU=0 ;; esac
+[[ ${DOTFILES_LANG:-en} == ru ]] && UI_RU=1 || UI_RU=0
 t() { if ((UI_RU)); then printf '%s' "$2"; else printf '%s' "$1"; fi; }
 
 msg()  { printf '\033[1;37m::\033[0m %s\n' "$*"; }
@@ -41,9 +30,6 @@ trap 'die "$(t "Error at line $LINENO: $BASH_COMMAND" "Ошибка в стро�
 [[ $EUID -ne 0 ]] || die "$(t "Run as a regular user, not root (sudo will ask when needed)." "Запускай от обычного пользователя, не от root (sudo спросится сам).")"
 command -v pacman >/dev/null || die "$(t "This is not Arch Linux (pacman not found)." "Это не Arch Linux (нет pacman).")"
 
-# ---------------------------------------------------------------------------
-# Бутстрап: если скрипт запущен не из репозитория (через curl) — клонируем его
-# ---------------------------------------------------------------------------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || true)"
 if [[ ! -f "$SCRIPT_DIR/packages/pacman.txt" ]]; then
     msg "$(t "Cloning dotfiles into $DOTFILES_DIR" "Клонирую dotfiles в $DOTFILES_DIR")"
@@ -60,8 +46,6 @@ DOTFILES_DIR="$SCRIPT_DIR"
 read_list() { sed -e 's/#.*//' -e 's/[[:space:]]*$//' -e '/^$/d' "$1"; }
 installed() { pacman -Qq "$1" &>/dev/null; }
 
-# Удалить установленные пакеты из списка (без зависимостей-проверок),
-# чтобы pacman --noconfirm не упёрся в конфликт
 remove_if_installed() {
     local p found=()
     for p in "$@"; do installed "$p" && found+=("$p"); done
@@ -71,9 +55,6 @@ remove_if_installed() {
     fi
 }
 
-# ---------------------------------------------------------------------------
-# Пакеты
-# ---------------------------------------------------------------------------
 keep_sudo_alive() {
     sudo -v
     ( trap - ERR; while kill -0 "$$" 2>/dev/null; do sudo -n true 2>/dev/null; sleep 50; done ) &
@@ -90,7 +71,6 @@ install_paru() {
 }
 
 install_packages() {
-    # pulseaudio конфликтует с pipewire-pulse
     remove_if_installed pulseaudio pulseaudio-bluetooth pulseaudio-alsa
 
     msg "$(t "Updating the system and installing repository packages" "Обновляю систему и ставлю пакеты из репозиториев")"
@@ -111,9 +91,6 @@ install_packages() {
     fi
 }
 
-# ---------------------------------------------------------------------------
-# NVIDIA: Maxwell/Pascal/Volta -> ветка 580xx (AUR), Turing и новее -> nvidia-open
-# ---------------------------------------------------------------------------
 setup_nvidia() {
     ((NO_NVIDIA)) && return 0
     local gpu
@@ -132,7 +109,6 @@ setup_nvidia() {
             msg "$(t "Legacy architecture — installing nvidia-580xx from AUR" "Старая архитектура — ставлю nvidia-580xx из AUR")"
             local had_lib32=0
             installed lib32-nvidia-utils && had_lib32=1
-            # Драйверы из репозиториев не поддерживают эту карту и конфликтуют с 580xx
             remove_if_installed nvidia nvidia-lts nvidia-dkms nvidia-open nvidia-open-lts \
                 nvidia-open-dkms nvidia-utils lib32-nvidia-utils opencl-nvidia nvidia-settings
             paru -S --needed --noconfirm --skipreview nvidia-580xx-dkms nvidia-580xx-utils
@@ -157,7 +133,6 @@ options nvidia NVreg_PreserveVideoMemoryAllocations=1'
         changed=1
     fi
 
-    # Ранняя загрузка модулей и отключение kms-хука (он подтягивает nouveau)
     local conf=/etc/mkinitcpio.conf before
     before="$(sha256sum "$conf")"
     [[ -e $conf.bak ]] || sudo cp "$conf" "$conf.bak"
@@ -172,20 +147,15 @@ options nvidia NVreg_PreserveVideoMemoryAllocations=1'
     fi
     sudo systemctl enable nvidia-suspend.service nvidia-hibernate.service nvidia-resume.service
 
-    # Перезагрузка нужна, только если драйвер ещё не загружен или что-то поменялось
     if ((changed)) || [[ ! -e /proc/driver/nvidia/version ]]; then
         NEED_REBOOT=1
     fi
 }
 
-# ---------------------------------------------------------------------------
-# Игры: multilib, 32-битный драйвер под видеокарту, Steam, gamemode
-# ---------------------------------------------------------------------------
 setup_gaming() {
     ((NO_GAMING)) && return 0
     msg "$(t "Setting up gaming: Steam, 32-bit drivers, gamemode" "Настраиваю игры: Steam, 32-битные драйверы, gamemode")"
 
-    # Steam и 32-битные библиотеки лежат в multilib
     if ! grep -q '^\[multilib\]' /etc/pacman.conf; then
         sudo sed -i '/^#\[multilib\]/,/^#Include/ s/^#//' /etc/pacman.conf
         grep -q '^\[multilib\]' /etc/pacman.conf \
@@ -193,8 +163,6 @@ setup_gaming() {
         sudo pacman -Sy --noconfirm
     fi
 
-    # 32-битный Vulkan/OpenGL ставим заранее под свою карту — иначе Steam
-    # потянет первый попавшийся (и для NVIDIA 580xx он будет конфликтовать)
     local gpus
     gpus="$(lspci | grep -Ei 'vga|3d|display' || true)"
     if grep -qi nvidia <<<"$gpus" && ((! NO_NVIDIA)); then
@@ -204,7 +172,6 @@ setup_gaming() {
             sudo pacman -S --needed --noconfirm lib32-nvidia-utils
         fi
     fi
-    # регистр важен: в «NVIDIA Corporation» тоже есть «ati»
     if grep -qE 'AMD|ATI|Radeon' <<<"$gpus"; then
         sudo pacman -S --needed --noconfirm lib32-mesa lib32-vulkan-radeon vulkan-radeon
     fi
@@ -215,16 +182,12 @@ setup_gaming() {
     mapfile -t pkgs < <(read_list "$DOTFILES_DIR/packages/gaming.txt")
     sudo pacman -S --needed --noconfirm "${pkgs[@]}"
 
-    # gamemode меняет приоритет процессов игры — нужна группа gamemode
     if getent group gamemode >/dev/null && ! id -nG "$USER" | grep -qw gamemode; then
         sudo usermod -aG gamemode "$USER"
         NEED_REBOOT=1
     fi
 }
 
-# ---------------------------------------------------------------------------
-# Конфиги: симлинки из репозитория, старые файлы уходят в бэкап
-# ---------------------------------------------------------------------------
 BACKUP_DIR="$HOME/.dotfiles-backup/$(date +%Y%m%d-%H%M%S)"
 
 link() {
@@ -253,7 +216,6 @@ link_configs() {
     done
     chmod +x "$DOTFILES_DIR"/config/hypr/scripts/*
 
-    # Ярлыки для лаунчера (пути подставляются под текущего пользователя)
     local apps="$HOME/.local/share/applications"
     mkdir -p "$apps"
     for f in "$DOTFILES_DIR"/extra/applications/*.desktop; do
@@ -261,9 +223,6 @@ link_configs() {
     done
 }
 
-# ---------------------------------------------------------------------------
-# Обои: видео генерируется локально (python + ffmpeg)
-# ---------------------------------------------------------------------------
 setup_wallpaper() {
     [[ -f $WALL_DIR/drift.mp4 && -f $WALL_DIR/drift.png ]] && return 0
     if ! command -v ffmpeg >/dev/null || ! command -v python3 >/dev/null; then
@@ -279,9 +238,6 @@ setup_wallpaper() {
     python3 -I "$DOTFILES_DIR/extra/wallpaper/generate.py" "$WALL_DIR" --size "$size"
 }
 
-# ---------------------------------------------------------------------------
-# SDDM: монохромная тема в стиле окружения
-# ---------------------------------------------------------------------------
 setup_sddm() {
     msg "$(t "Setting up the SDDM login screen" "Настраиваю экран входа SDDM")"
     local theme=/usr/share/sddm/themes/mono
@@ -294,15 +250,11 @@ setup_sddm() {
     printf '%s\n' '[Theme]' 'Current=mono' 'CursorTheme=Adwaita' 'CursorSize=24' \
         | sudo tee /etc/sddm.conf.d/10-mono.conf >/dev/null
 
-    # Включаем SDDM, только если не настроен другой экран входа
     if ! systemctl is-enabled display-manager.service &>/dev/null; then
         sudo systemctl enable sddm.service
     fi
 }
 
-# ---------------------------------------------------------------------------
-# Темы, приложения по умолчанию, оболочка, сервисы
-# ---------------------------------------------------------------------------
 apply_theme() {
     msg "$(t "Applying the dark theme" "Применяю тёмную тему")"
     mkdir -p "$HOME/.config/qt6ct/colors"
@@ -314,13 +266,19 @@ custom_palette=true
 icon_theme=Papirus-Dark
 standard_dialogs=default
 style=Fusion
+
+[Fonts]
+fixed="JetBrainsMono Nerd Font,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1"
+general="JetBrainsMono Nerd Font,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1"
 EOF
 
     if command -v gsettings >/dev/null; then
         local kv
         for kv in "color-scheme 'prefer-dark'" "gtk-theme 'adw-gtk3-dark'" \
                   "icon-theme 'Papirus-Dark'" "cursor-theme 'Adwaita'" \
-                  "cursor-size 24" "font-name 'Noto Sans 10'"; do
+                  "cursor-size 24" "font-name 'JetBrainsMono Nerd Font 10'" \
+                  "document-font-name 'JetBrainsMono Nerd Font 10'" \
+                  "monospace-font-name 'JetBrainsMono Nerd Font 10'"; do
             eval "gsettings set org.gnome.desktop.interface $kv" 2>/dev/null || true
         done
         gsettings set org.gnome.desktop.wm.preferences button-layout ':' 2>/dev/null || true
@@ -346,7 +304,6 @@ setup_services() {
     systemctl --user enable hyprpolkitagent.service 2>/dev/null || true
 }
 
-# ---------------------------------------------------------------------------
 NEED_REBOOT=0
 if ((LINKS_ONLY)); then
     link_configs

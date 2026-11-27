@@ -1,10 +1,4 @@
 #!/usr/bin/env bash
-# Мгновенный вызов уже запущенных фоновых процессов — клик лишь посылает сигнал:
-#   ui player       показать/скрыть мини-плеер          (scripts/player)
-#   ui settings     открыть окно настроек               (scripts/player)
-#   ui play-pause   пауза/продолжить показанный трек    (scripts/media)
-#   ui next         следующий трек                      (scripts/media)
-# Если нужного процесса нет — запускаем скрипт напрямую (медленнее).
 dir="$HOME/.config/hypr/scripts"
 run="${XDG_RUNTIME_DIR:-/tmp}"
 
@@ -18,9 +12,8 @@ esac
 
 if [[ -r $pidfile ]]; then
     pid="$(<"$pidfile")"
-    # сигнал только нашему процессу: pid мог достаться другой программе
     if [[ $pid =~ ^[0-9]+$ ]] && [[ -r /proc/$pid/cmdline ]]; then
-        mapfile -d '' args < "/proc/$pid/cmdline"      # без tr/grep: ни одного лишнего процесса
+        mapfile -d '' args < "/proc/$pid/cmdline"
         if [[ "${args[*]}" == *"$owner"* ]]; then
             kill -"$sig" "$pid" && exit 0
         fi

@@ -72,7 +72,6 @@ window#waybar {
     color: #ededed;
 }
 
-/* Иконки-кнопки: один набор глифов (Material Design из Nerd Font) и один размер */
 #custom-settings,
 #custom-power {
     padding: 0 11px;

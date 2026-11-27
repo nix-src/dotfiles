@@ -1,20 +1,4 @@
 #!/usr/bin/env python3
-"""Модуль waybar custom/media: текущий трек из любого MPRIS-плеера.
-
-Работает на событиях libplayerctl (без опроса). Печатает JSON для waybar
-при каждом изменении. Когда ничего не играет и нет трека на паузе —
-печатает пустую строку, и waybar прячет модуль.
-
-    media              модуль для waybar (exec)
-    media play-pause   управлять тем плеером, что сейчас показан в модуле
-    media next | previous
-
-Клики по модулю идут через scripts/ui: он лишь посылает сигнал уже
-запущенному модулю (SIGUSR1 — пауза, SIGUSR2 — следующий трек), а тот
-отправляет команду плееру асинхронно и сразу меняет значок. Python и
-playerctl при клике не запускаются, поэтому отклик мгновенный.
-Без работающего модуля команды выполняет playerctl (медленнее).
-"""
 import html
 import json
 import os
@@ -22,10 +6,9 @@ import signal
 import sys
 
 RUNTIME = os.environ.get("XDG_RUNTIME_DIR", "/tmp")
-CURRENT = os.path.join(RUNTIME, "dotfiles-media-player")   # показанный плеер
+CURRENT = os.path.join(RUNTIME, "dotfiles-media-player")
 PIDFILE = os.path.join(RUNTIME, "dotfiles-media.pid")
 
-# Запасной путь для команд (модуль не запущен): без загрузки GObject
 if sys.argv[1:2] and sys.argv[1] in ("play-pause", "next", "previous"):
     try:
         with open(CURRENT) as f:
@@ -35,16 +18,16 @@ if sys.argv[1:2] and sys.argv[1] in ("play-pause", "next", "previous"):
     cmd = ["playerctl", *(["-p", inst] if inst else []), sys.argv[1]]
     os.execvp(cmd[0], cmd)
 
-import gi  # noqa: E402
+import gi
 
 gi.require_version("Playerctl", "2.0")
-from gi.repository import Gio, GLib, Playerctl  # noqa: E402
+from gi.repository import Gio, GLib, Playerctl
 
 try:
     gi.require_version("GLibUnix", "2.0")
-    from gi.repository import GLibUnix  # noqa: E402
+    from gi.repository import GLibUnix
     signal_add = GLibUnix.signal_add
-except (ValueError, ImportError):     # старый GLib
+except (ValueError, ImportError):
     signal_add = GLib.unix_signal_add
 
 PLAY, PAUSE = "\U000f040a", "\U000f03e4"
@@ -53,8 +36,6 @@ PLAYING = Playerctl.PlaybackStatus.PLAYING
 
 
 def pick(players):
-    """Активный плеер: сначала играющий, иначе на паузе; из нескольких —
-    тот, что последним начал играть (players — список от старых к новым)."""
     for want in (PLAYING, Playerctl.PlaybackStatus.PAUSED):
         for p in reversed(players):
             try:
@@ -70,7 +51,6 @@ def instance(p):
 
 
 def mpris_call(player, method, fallback):
-    """Асинхронный вызов метода MPRIS: не ждём ответа плеера."""
     try:
         inst = instance(player)
         if player.props.source != Playerctl.Source.DBUS_SESSION or not inst:
@@ -90,11 +70,9 @@ class Module:
     def __init__(self):
         self.last = None
         self.current = None
-        self.shown = None          # плеер, показанный в модуле сейчас
-        self.optimistic = None     # (плеер, играет?) — до подтверждения от плеера
+        self.shown = None
+        self.optimistic = None
         self.optimistic_timer = 0
-        # Список плееров ведём сами (instance -> Player), а PlayerManager
-        # используем только для событий: его внутренний список ненадёжен.
         self.players = {}
         self.manager = Playerctl.PlayerManager()
         self.manager.connect("name-appeared", lambda _m, name: self.add(name))
@@ -102,9 +80,7 @@ class Module:
         for name in self.manager.props.player_names:
             self.add(name)
         self.emit()
-        # страховка на случай, если плеер не прислал событие
         GLib.timeout_add_seconds(3, lambda: self.emit() or True)
-        # клики по модулю (через scripts/ui)
         signal_add(GLib.PRIORITY_HIGH, signal.SIGUSR1, self.play_pause)
         signal_add(GLib.PRIORITY_HIGH, signal.SIGUSR2, self.next)
         try:
@@ -132,19 +108,16 @@ class Module:
             self.emit()
 
     def on_status(self, key, player, status):
-        # начавший играть плеер — в конец списка (он «самый свежий»)
         if status == PLAYING and self.players.get(key) is player:
             self.players[key] = self.players.pop(key)
         if self.optimistic and self.optimistic[0] is player:
             self.clear_optimistic()
         self.emit()
 
-    # ---------------------------------------------------------------- клики
     def play_pause(self):
         p = self.shown
         if p is not None:
             mpris_call(p, "PlayPause", p.play_pause)
-            # значок меняем сразу; настоящее состояние придёт событием
             try:
                 playing = p.props.playback_status == PLAYING
             except GLib.Error:
@@ -171,7 +144,6 @@ class Module:
             self.emit()
         return False
 
-    # ---------------------------------------------------------------- вывод
     def remember(self, p):
         self.shown = p
         inst = instance(p)
@@ -185,7 +157,6 @@ class Module:
                 pass
 
     def render(self):
-        # плеер, которому только что нажали паузу, остаётся показанным
         p = self.optimistic[0] if self.optimistic else pick(list(self.players.values()))
         if p is not None and p not in self.players.values():
             self.optimistic = None
@@ -203,7 +174,6 @@ class Module:
         label = f"{artist} — {title}" if artist else title
         short = label if len(label) <= MAX else label[: MAX - 1] + "…"
         return {
-            # иконка того же кегля, что и значки-кнопки в панели (15px)
             "text": f"<span size='11.25pt'>{PLAY if playing else PAUSE}</span>  {html.escape(short)}",
             "class": "playing" if playing else "paused",
         }

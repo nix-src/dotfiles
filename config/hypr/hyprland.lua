@@ -1,17 +1,8 @@
--- Hyprland (>= 0.57, Lua config)
--- Монохром, без скруглений, без blur и теней.
-
 local hyprdir = (debug.getinfo(1, "S").source:match("^@(.*)/[^/]*$")) or (os.getenv("HOME") .. "/.config/hypr")
 package.path = hyprdir .. "/?.lua;" .. package.path
 
-----------------
---  SETTINGS  --
-----------------
-
--- Значения по умолчанию. Окно настроек (Super + I) сохраняет изменения в
--- ~/.config/dotfiles-local/settings.lua — этот файл не в репозитории.
 local S = {
-    monitors       = {},            -- [output] = { mode =, position =, scale = }
+    monitors       = {},
     kb_layout      = "us,ru",
     kb_options     = "grp:alt_shift_toggle",
     sensitivity    = 0,
@@ -28,9 +19,9 @@ local S = {
     terminal       = "kitty",
     browser        = "firefox",
     files          = "thunar",
-    canvas         = {},            -- spread, shrink, pad, friction
-    game_tearing   = true,          -- игры: кадр сразу на экран, без ожидания vsync
-    game_classes   = "",            -- доп. классы окон игр (regex через |)
+    canvas         = {},
+    game_tearing   = true,
+    game_classes   = "",
 }
 local local_dir = os.getenv("HOME") .. "/.config/dotfiles-local"
 do
@@ -47,10 +38,6 @@ local menu        = "fuzzel"
 local scripts     = os.getenv("HOME") .. "/.config/hypr/scripts"
 local mod         = "SUPER"
 
-----------------
---  MONITORS  --
-----------------
-
 hl.monitor({
     output   = "",
     mode     = "preferred",
@@ -66,12 +53,6 @@ for name, m in pairs(S.monitors) do
     })
 end
 
------------------
---  AUTOSTART  --
------------------
-
--- Сеанс может быть запущен как через uwsm («Hyprland (uwsm-managed)» в SDDM),
--- так и напрямую. Через uwsm программы запускаются как systemd-юниты.
 local UWSM = os.getenv("UWSM_FINALIZE_VARNAMES") ~= nil
 local function app(cmd) return UWSM and ("uwsm app -- " .. cmd) or cmd end
 
@@ -83,14 +64,11 @@ hl.on("hyprland.start", function()
     hl.exec_cmd(app(scripts .. "/idle"))
     hl.exec_cmd(app("wl-paste --type text --watch cliphist store"))
     hl.exec_cmd(app("wl-paste --type image --watch cliphist store"))
-    -- В uwsm-сеансе polkit-агент запускает systemd (hyprpolkitagent.service)
     if not UWSM then
         hl.exec_cmd("/usr/lib/hyprpolkitagent/hyprpolkitagent")
     end
 end)
 
--- Переменные окружения. В uwsm-сеансе они же берутся из ~/.config/uwsm/env;
--- здесь — чтобы всё работало и в сеансе без uwsm.
 hl.env("XCURSOR_THEME", "Adwaita")
 hl.env("XCURSOR_SIZE", "24")
 hl.env("HYPRCURSOR_SIZE", "24")
@@ -98,10 +76,6 @@ hl.env("QT_QPA_PLATFORM", "wayland;xcb")
 hl.env("QT_QPA_PLATFORMTHEME", "qt6ct")
 hl.env("QT_WAYLAND_DISABLE_WINDOWDECORATION", "1")
 hl.env("ELECTRON_OZONE_PLATFORM_HINT", "auto")
-
----------------------
---  LOOK AND FEEL  --
----------------------
 
 hl.config({
     general = {
@@ -113,7 +87,7 @@ hl.config({
             inactive_border = "rgba(1e1e1eff)",
         },
         resize_on_border = true,
-        layout           = "dwindle",      -- allow_tearing задаётся в разделе «Игры»
+        layout           = "dwindle",
     },
 
     decoration = {
@@ -156,7 +130,6 @@ hl.config({
     binds = { workspace_back_and_forth = true },
 })
 
--- NVIDIA: программный курсор, если аппаратный глючит
 local nv = io.open("/proc/driver/nvidia/version", "r")
 if nv then
     nv:close()
@@ -165,10 +138,6 @@ if nv then
     hl.env("__GLX_VENDOR_LIBRARY_NAME", "nvidia")
     hl.env("NVD_BACKEND", "direct")
 end
-
-----------------
---  ANIMATIONS --
-----------------
 
 hl.curve("snap",   { type = "bezier", points = { {0.2, 1},   {0.3, 1}    } })
 hl.curve("over",   { type = "bezier", points = { {0.05, 0.9}, {0.1, 1.06} } })
@@ -196,14 +165,9 @@ hl.layer_rule({ name = "notifications-anim", match = { namespace = "^notificatio
 hl.layer_rule({ name = "miniplayer-anim",     match = { namespace = "^miniplayer$" },    animation = "slide top" })
 hl.layer_rule({ name = "wallpaper-no-anim",  match = { namespace = "^mpvpaper$" },      no_anim = true })
 
--------------------
---  KEYBINDINGS  --
--------------------
-
 local function bind(keys, dsp, opts) hl.bind(keys, dsp, opts) end
 local function exec(cmd) return hl.dsp.exec_cmd(cmd) end
 
--- Приложения
 bind(mod .. " + Return",         exec(terminal))
 bind(mod .. " + D",              exec(menu))
 bind(mod .. " + E",              exec(fileManager))
@@ -212,12 +176,10 @@ bind(mod .. " + I",              exec(scripts .. "/ui settings"))
 bind(mod .. " + C",              exec(scripts .. "/clipboard"))
 bind(mod .. " + N",              exec("makoctl dismiss --all"))
 
--- Сессия
 bind(mod .. " + Escape",         exec(scripts .. "/lock"))
 bind(mod .. " + SHIFT + Escape", exec(scripts .. "/powermenu"))
 bind(mod .. " + SHIFT + R",      hl.dsp.reload_config())
 
--- Окна
 bind(mod .. " + Q",              hl.dsp.window.close())
 bind(mod .. " + SHIFT + F",      hl.dsp.window.fullscreen())
 bind(mod .. " + M",              hl.dsp.window.fullscreen({ mode = "maximized" }))
@@ -225,7 +187,6 @@ bind(mod .. " + V",              hl.dsp.window.float({ action = "toggle" }))
 bind(mod .. " + P",              hl.dsp.window.pseudo())
 bind(mod .. " + T",              hl.dsp.layout("togglesplit"))
 
--- Фокус / перемещение / размер: стрелки и hjkl
 local dirs = {
     { "left",  "H", "l", -40,   0 },
     { "right", "L", "r",  40,   0 },
@@ -240,7 +201,6 @@ for _, d in ipairs(dirs) do
     end
 end
 
--- Рабочие столы 1..10
 for i = 1, 10 do
     local key = i % 10
     bind(mod .. " + " .. key,         hl.dsp.focus({ workspace = i }))
@@ -250,20 +210,16 @@ bind(mod .. " + Tab",          hl.dsp.focus({ workspace = "previous" }))
 bind(mod .. " + mouse_down",   hl.dsp.focus({ workspace = "e+1" }))
 bind(mod .. " + mouse_up",     hl.dsp.focus({ workspace = "e-1" }))
 
--- Scratchpad
 bind(mod .. " + S",            hl.dsp.workspace.toggle_special("scratch"))
 bind(mod .. " + SHIFT + S",    hl.dsp.window.move({ workspace = "special:scratch" }))
 
--- Мышь
 bind(mod .. " + mouse:272",    hl.dsp.window.drag(),   { mouse = true })
 bind(mod .. " + mouse:273",    hl.dsp.window.resize(), { mouse = true })
 
--- Скриншоты / пипетка
 bind("Print",                  exec(scripts .. "/screenshot area"))
 bind("SHIFT + Print",          exec(scripts .. "/screenshot screen"))
 bind(mod .. " + Print",        exec("hyprpicker -a"))
 
--- Мультимедиа
 local locked_rep = { locked = true, repeating = true }
 bind("XF86AudioRaiseVolume",  exec("wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+"), locked_rep)
 bind("XF86AudioLowerVolume",  exec("wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"),      locked_rep)
@@ -276,18 +232,9 @@ bind("XF86AudioPrev",         exec("playerctl previous"),   { locked = true })
 bind("XF86AudioPlay",         exec("playerctl play-pause"), { locked = true })
 bind("XF86AudioPause",        exec("playerctl play-pause"), { locked = true })
 
--- Бесконечный холст (Super + F и панорамирование) — см. canvas.lua
 local canvas = require("canvas")
 canvas.setup(mod, S.canvas)
 
----------------------------------
---  ВИДЕООБОИ: ТОЛЬКО КОГДА ВИДНО  --
----------------------------------
-
--- Видео (mpvpaper) стоит ~8% CPU и заставляет Hyprland перерисовывать экран.
--- Пока на экране есть окна, обои почти не видны — процесс замораживается
--- (SIGSTOP, на экране остаётся последний кадр) и оживает на пустом рабочем
--- столе или в режиме холста.
 local function wallpaper_visible()
     for _, m in ipairs(hl.get_monitors()) do
         local ws = m.active_workspace
@@ -312,7 +259,6 @@ function _G.wallpaper_refresh(force)
     end
 end
 
--- События приходят до того, как список окон обновится, — проверяем чуть позже
 local function wallpaper_soon()
     if #hl.get_monitors() == 0 then return end
     hl.timer(function() _G.wallpaper_refresh() end, { timeout = 60, type = "oneshot" })
@@ -321,33 +267,17 @@ for _, ev in ipairs({ "workspace.active", "monitor.focused", "window.open", "win
                       "window.destroy", "window.move_to_workspace" }) do
     hl.on(ev, wallpaper_soon)
 end
--- после перезагрузки конфига состояние неизвестно — проверяем заново
--- (при старте сеанса это делает сам скрипт обоев)
 hl.on("config.reloaded", function()
-    -- без мониторов (например, при hyprland --verify-config) ничего не трогаем
     if #hl.get_monitors() > 0 then _G.wallpaper_refresh(true) end
 end)
 
--------------
---  ИГРЫ  --
--------------
-
--- В Wayland нет «эксклюзивного» полноэкранного режима, как в Windows: игра всегда
--- выводится через композитор, а он по умолчанию ждёт vsync — отсюда задержка.
--- Для окон игр:
---   immediate      — tearing: кадр уходит на экран сразу, без ожидания vsync
---                    (действует для полноэкранного окна, как настоящий fullscreen);
---   content=game   — с render.direct_scanout = 2 полноэкранная игра выводится
---                    на экран напрямую, минуя композитинг;
---   idle_inhibit   — экран не гаснет и не блокируется во время игры.
--- CS2 (нативный), игры Steam/Proton (steam_app_*), gamescope, игры Wine (*.exe).
 local games = "cs2|steam_app_[0-9]+|gamescope|.+\\.exe"
 if S.game_classes ~= "" then games = games .. "|" .. S.game_classes end
 
 hl.config({
     general = { allow_tearing = S.game_tearing },
-    render  = { direct_scanout = 2 },   -- только для окон с типом содержимого «игра»
-    misc    = { vrr = 2 },              -- адаптивная синхронизация в полноэкранных играх
+    render  = { direct_scanout = 2 },
+    misc    = { vrr = 2 },
 })
 
 hl.window_rule({
@@ -358,12 +288,6 @@ hl.window_rule({
     idle_inhibit = "always",
 })
 
--- Мышь в играх «как в Windows с raw input»: без ускорения и без системного
--- множителя, чтобы сенса зависела только от DPI и sensitivity в игре.
--- gamescope (и XWayland-игры) получают движения мыши уже после ускорения
--- libinput, поэтому adaptive + sensitivity ≠ 0 ломает мышечную память.
--- Включается сам, пока открыто окно игры (параметры запуска в Steam не нужны);
--- вручную: hyprctl eval 'game_mode(true|false)'.
 function _G.game_mode(on)
     if on then
         hl.config({ input = { sensitivity = 0, accel_profile = "flat" } })
@@ -375,8 +299,6 @@ function _G.game_mode(on)
     end
 end
 
--- Тот же список, что в правиле «games», но в виде проверки на Lua
--- (game_classes из настроек — точные имена классов через |).
 local extra_games = {}
 for c in S.game_classes:gmatch("[^|]+") do extra_games[c] = true end
 local function is_game(w)
@@ -386,15 +308,12 @@ local function is_game(w)
 end
 
 local game_on   = nil
-local game_pids = {}    -- процессы, для которых уже запрошен gamemode
+local game_pids = {}
 local function game_refresh()
     local any = false
     for _, w in ipairs(hl.get_windows()) do
         if w.mapped and is_game(w) then
             any = true
-            -- gamemode без gamemoderun в параметрах запуска; -r переключает,
-            -- поэтому на каждый процесс — один раз (gamemode сам снимает
-            -- регистрацию, когда процесс завершится)
             if w.pid and w.pid > 0 and not game_pids[w.pid] then
                 game_pids[w.pid] = true
                 hl.exec_cmd("command -v gamemoded >/dev/null && gamemoded -r" .. w.pid)
@@ -407,26 +326,19 @@ local function game_refresh()
         if not any then game_pids = {} end
     end
 end
--- список окон обновляется чуть позже события — проверяем с задержкой
 local function game_soon()
     hl.timer(game_refresh, { timeout = 100, type = "oneshot" })
 end
 for _, ev in ipairs({ "window.open", "window.close", "window.destroy", "window.class" }) do
     hl.on(ev, game_soon)
 end
--- перезагрузка конфига сбрасывает input к значениям из файла — применяем заново
 hl.on("config.reloaded", function() game_on = nil; game_soon() end)
 
--- Видео в полноэкранном режиме тоже не даёт экрану гаснуть
 hl.window_rule({
     name         = "fullscreen-no-idle",
     match        = { fullscreen = true },
     idle_inhibit = "fullscreen",
 })
-
---------------------
---  WINDOW RULES  --
---------------------
 
 hl.window_rule({
     name  = "suppress-maximize-events",
@@ -440,7 +352,6 @@ hl.window_rule({
     no_focus = true,
 })
 
--- Утилиты открываются плавающими по центру
 hl.window_rule({
     name  = "float-utils",
     match = { class = "^(float|dotfiles\\.settings|dotfiles\\.shell|org\\.pulseaudio\\.pavucontrol|nm-connection-editor|blueman-manager|xdg-desktop-portal-gtk|hyprland-run)$" },

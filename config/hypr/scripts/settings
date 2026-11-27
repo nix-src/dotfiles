@@ -1,12 +1,4 @@
 #!/usr/bin/env python3
-"""Окно настроек окружения (Super + I или шестерёнка в панели).
-
-Хранит значения в ~/.config/dotfiles-local/ (вне репозитория):
-  settings.json   — состояние окна
-  settings.lua    — читается hyprland.lua при загрузке
-  hypridle.conf   — таймауты блокировки/экрана/сна
-  wallpaper       — режим обоев (animated | static | none)
-"""
 import json
 import os
 import shutil
@@ -14,8 +6,6 @@ import signal
 import subprocess
 import sys
 
-# Быстрый путь: окно открывает уже запущенный фоновый процесс (scripts/player),
-# в котором GTK загружен заранее. Без него — запускаемся как обычно.
 if __name__ == "__main__" and "--standalone" not in sys.argv:
     try:
         with open(os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "dotfiles-ui.pid")) as _f:
@@ -28,25 +18,23 @@ if __name__ == "__main__" and "--standalone" not in sys.argv:
     except (OSError, ValueError):
         pass
 
-import gi  # noqa: E402
+import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Gdk", "4.0")
-from gi.repository import Gdk, Gio, GLib, Gtk  # noqa: E402
+from gi.repository import Gdk, Gio, GLib, Gtk
 
 HOME = os.path.expanduser("~")
 LOCAL = os.path.join(HOME, ".config", "dotfiles-local")
 SCRIPTS = os.path.join(HOME, ".config", "hypr", "scripts")
 JSON_PATH = os.path.join(LOCAL, "settings.json")
 
-# ------------------------------------------------------------------- язык
-
 def detect_lang():
     try:
         out = subprocess.run([os.path.join(SCRIPTS, "lang")], capture_output=True, text=True, timeout=3)
         return "ru" if out.stdout.strip() == "ru" else "en"
     except (OSError, subprocess.TimeoutExpired):
-        return "ru" if os.environ.get("LANG", "").startswith("ru") else "en"
+        return "en"
 
 
 LANG = detect_lang()
@@ -131,11 +119,9 @@ EN = {
 
 
 def _(text):
-    """Строки в коде — на русском; для английского берётся перевод из EN."""
     return text if LANG == "ru" else EN.get(text, text)
 
 
-# Должны совпадать со значениями по умолчанию в hyprland.lua / canvas.lua
 DEFAULTS = {
     "monitors": {},
     "kb_layout": "us,ru",
@@ -157,7 +143,7 @@ DEFAULTS = {
     "canvas": {"spread": 1.35, "shrink": 0.82, "pad": 0.35, "friction": 0.94},
     "wallpaper": "animated",
     "idle": {"lock": 10, "screen_off": 15, "suspend": 0},
-    "lang": "auto",
+    "lang": "en",
     "game_tearing": True,
     "game_classes": "",
 }
@@ -168,7 +154,7 @@ LAYOUT_SWITCH = [
     ("Super + Space", "grp:win_space_toggle"),
     ("Caps Lock", "grp:caps_toggle"),
 ]
-LANGS = [("авто (по системе)", "auto"), ("English", "en"), ("Русский", "ru")]
+LANGS = [("English", "en"), ("Русский", "ru"), ("авто (по системе)", "auto")]
 WALLPAPER = [("анимированные", "animated"), ("статичные", "static"), ("нет (сплошной фон)", "none")]
 
 CSS = """
@@ -195,8 +181,6 @@ scale highlight { background: #c8c8c8; }
 scale slider { background: #ededed; box-shadow: none; }
 """
 
-
-# --------------------------------------------------------------------- данные
 
 def deep_merge(base, over):
     out = json.loads(json.dumps(base))
@@ -279,13 +263,11 @@ def spawn(*cmd):
 
 
 def network_tool():
-    """nmtui, если сетью управляет NetworkManager, иначе impala (iwd)."""
     active = subprocess.run(["systemctl", "is-active", "--quiet", "NetworkManager"]).returncode == 0
     return "nmtui" if active and shutil.which("nmtui") else "impala"
 
 
 def launch(*cmd):
-    """Запустить фоновую программу сеанса (через uwsm, если сеанс под ним)."""
     if os.environ.get("UWSM_FINALIZE_VARNAMES") and shutil.which("uwsm"):
         cmd = ("uwsm", "app", "--", *cmd)
     spawn(*cmd)
@@ -298,8 +280,6 @@ def monitors():
     except (OSError, ValueError, subprocess.TimeoutExpired):
         return []
 
-
-# --------------------------------------------------------------------- виджеты
 
 def row(name, widget, hint=None):
     box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
@@ -365,8 +345,6 @@ def dd_value(w):
     return w.values[w.get_selected()]
 
 
-# ----------------------------------------------------------------------- окно
-
 class SettingsWindow(Gtk.ApplicationWindow):
     def __init__(self, app):
         super().__init__(application=app, title=_("Настройки"))
@@ -387,7 +365,6 @@ class SettingsWindow(Gtk.ApplicationWindow):
         self.set_child(root)
         self.build()
 
-    # ------------------------------------------------------------ страницы
     def page(self, name, title):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         box.add_css_class("page")
@@ -402,7 +379,6 @@ class SettingsWindow(Gtk.ApplicationWindow):
     def build(self):
         s, w = self.s, self.w
 
-        # Экран
         p = self.page("display", _("Экран"))
         self.mon = {}
         mons = monitors()
@@ -426,7 +402,6 @@ class SettingsWindow(Gtk.ApplicationWindow):
             p.append(row(_("Позиция"), pos_w, _("auto или XxY, например 1920x0")))
             self.mon[name] = (mode_w, scale_w, pos_w)
 
-        # Ввод
         p = self.page("input", _("Клавиатура и мышь"))
         p.append(section(_("клавиатура")))
         w["kb_layout"] = entry(s["kb_layout"])
@@ -446,7 +421,6 @@ class SettingsWindow(Gtk.ApplicationWindow):
         w["natural_scroll"] = switch(s["natural_scroll"])
         p.append(row(_("Естественная прокрутка"), w["natural_scroll"]))
 
-        # Внешний вид
         p = self.page("look", _("Внешний вид"))
         w["gaps_in"] = spin(0, 40, 1, s["gaps_in"])
         p.append(row(_("Отступ между окнами"), w["gaps_in"]))
@@ -465,7 +439,6 @@ class SettingsWindow(Gtk.ApplicationWindow):
         w["lang"] = dropdown(LANGS, s["lang"])
         p.append(row(_("Язык интерфейса"), w["lang"], _("применится после перезапуска панели и окон")))
 
-        # Холст
         c = s["canvas"]
         p = self.page("canvas", _("Бесконечный холст"))
         w["spread"] = slider(1.0, 2.5, 0.05, c["spread"])
@@ -477,7 +450,6 @@ class SettingsWindow(Gtk.ApplicationWindow):
         w["friction"] = slider(0.80, 0.98, 0.01, c["friction"])
         p.append(row(_("Инерция"), w["friction"], _("больше — дольше докатывается")))
 
-        # Игры
         p = self.page("games", _("Игры"))
         w["game_tearing"] = switch(s["game_tearing"])
         p.append(row(_("Мгновенный вывод кадров (tearing)"), w["game_tearing"],
@@ -490,7 +462,6 @@ class SettingsWindow(Gtk.ApplicationWindow):
         tip.set_margin_top(14)
         p.append(tip)
 
-        # Питание
         i = s["idle"]
         p = self.page("power", _("Питание"))
         w["lock"] = spin(0, 240, 1, i["lock"])
@@ -500,7 +471,6 @@ class SettingsWindow(Gtk.ApplicationWindow):
         w["suspend"] = spin(0, 480, 5, i["suspend"])
         p.append(row(_("Сон через"), w["suspend"], _("минут, 0 — никогда")))
 
-        # Приложения
         p = self.page("apps", _("Приложения"))
         w["terminal"] = entry(s["terminal"])
         p.append(row(_("Терминал"), w["terminal"], "Super + Enter"))
@@ -509,7 +479,6 @@ class SettingsWindow(Gtk.ApplicationWindow):
         w["files"] = entry(s["files"])
         p.append(row(_("Файловый менеджер"), w["files"], "Super + E"))
 
-        # Система
         p = self.page("system", _("Система"))
         grid = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, max_children_per_line=3,
                            column_spacing=10, row_spacing=10, homogeneous=True)
@@ -523,7 +492,6 @@ class SettingsWindow(Gtk.ApplicationWindow):
             (_("Перечитать Hyprland"), ["hyprctl", "reload"]),
         ]
         for label, cmd in tools:
-            # для терминальных утилит проверяем и сам терминал, и утилиту
             needed = cmd[4] if cmd[1:4] == ["--class", "float", "-e"] else cmd[0]
             if not shutil.which(cmd[0]) or not shutil.which(needed):
                 continue
@@ -533,7 +501,6 @@ class SettingsWindow(Gtk.ApplicationWindow):
             grid.append(b)
         p.append(grid)
 
-    # ------------------------------------------------------------ футер
     def footer(self):
         bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         bar.add_css_class("footer")
@@ -600,7 +567,6 @@ class SettingsWindow(Gtk.ApplicationWindow):
         GLib.timeout_add_seconds(4, self.clear_status)
 
     def clear_status(self):
-        # окно могли закрыть раньше, чем сработал таймер
         if self.get_mapped():
             self.status.set_text("")
         return False
@@ -631,7 +597,6 @@ class SettingsWindow(Gtk.ApplicationWindow):
         self.rebuild()
 
     def rebuild(self):
-        """Пересоздать окно (после смены языка или сброса)."""
         app = self.get_application()
         self.destroy()
         SettingsWindow(app).present()
