@@ -34,7 +34,7 @@ def detect_lang():
         out = subprocess.run([os.path.join(SCRIPTS, "lang")], capture_output=True, text=True, timeout=3)
         return "ru" if out.stdout.strip() == "ru" else "en"
     except (OSError, subprocess.TimeoutExpired):
-        return "en"
+        return "ru" if os.environ.get("LANG", "").startswith("ru") else "en"
 
 
 LANG = detect_lang()
@@ -143,7 +143,7 @@ DEFAULTS = {
     "canvas": {"spread": 1.35, "shrink": 0.82, "pad": 0.35, "friction": 0.94},
     "wallpaper": "animated",
     "idle": {"lock": 10, "screen_off": 15, "suspend": 0},
-    "lang": "en",
+    "lang": "auto",
     "game_tearing": True,
     "game_classes": "",
 }
@@ -154,7 +154,7 @@ LAYOUT_SWITCH = [
     ("Super + Space", "grp:win_space_toggle"),
     ("Caps Lock", "grp:caps_toggle"),
 ]
-LANGS = [("English", "en"), ("Русский", "ru"), ("авто (по системе)", "auto")]
+LANGS = [("авто (по системе)", "auto"), ("English", "en"), ("Русский", "ru")]
 WALLPAPER = [("анимированные", "animated"), ("статичные", "static"), ("нет (сплошной фон)", "none")]
 
 CSS = """

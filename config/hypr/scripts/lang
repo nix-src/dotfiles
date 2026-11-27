@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 local_dir="$HOME/.config/dotfiles-local"
-choice="$(cat "$local_dir/lang" 2>/dev/null || echo en)"
+choice="$(cat "$local_dir/lang" 2>/dev/null || echo auto)"
 
 if [[ $choice != en && $choice != ru ]]; then
     loc="${LC_ALL:-${LC_MESSAGES:-${LANG:-en_US.UTF-8}}}"

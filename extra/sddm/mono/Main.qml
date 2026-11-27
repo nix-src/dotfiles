@@ -14,7 +14,7 @@ Rectangle {
     readonly property color danger: "#b36b6b"
     readonly property string fontName: config.font || "monospace"
 
-    readonly property string lang: config.lang || "en"
+    readonly property string lang: config.lang || "auto"
     readonly property bool ru: lang === "ru" || (lang === "auto" && Qt.locale().name.indexOf("ru") === 0)
     readonly property var loc: Qt.locale(ru ? "ru_RU" : "en_US")
     function tr(en, ruText) { return root.ru ? ruText : en }

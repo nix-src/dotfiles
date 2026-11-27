@@ -18,7 +18,7 @@ for arg in "$@"; do
     esac
 done
 
-[[ ${DOTFILES_LANG:-en} == ru ]] && UI_RU=1 || UI_RU=0
+case "${DOTFILES_LANG:-${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}}" in ru*) UI_RU=1 ;; *) UI_RU=0 ;; esac
 t() { if ((UI_RU)); then printf '%s' "$2"; else printf '%s' "$1"; fi; }
 
 msg()  { printf '\033[1;37m::\033[0m %s\n' "$*"; }
